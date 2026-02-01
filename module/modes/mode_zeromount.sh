@@ -1,39 +1,24 @@
 #!/system/bin/sh
 # shellcheck shell=bash disable=SC3043,SC1090
-# Mode: ZeroMount VFS — kernel-level path interception via zm CLI
+# Mode: ZeroMount VFS — delegates to ZeroMount module via whiteouts + sync.sh
 
 SCALPEL_NUKE_LIST="${SCALPEL_DATA:-/data/adb/scalpel}/nuke_list.json"
+_ZM_SYNC="/data/adb/modules/zeromount/sync.sh"
+_ZM_TRACKING="/data/adb/zeromount/module_paths/scalpel"
 
-_ZM_BIN=""
-
-_find_zm() {
-    if [ -n "$_ZM_BIN" ]; then
-        [ -x "$_ZM_BIN" ] && return 0
-        _ZM_BIN=""
-    fi
-    if command -v zm >/dev/null 2>&1; then
-        _ZM_BIN="zm"
-    else
-        local p
-        for p in /data/adb/modules/zeromount/bin/zm /data/adb/ksu/bin/zm /data/adb/magisk/zm /data/adb/ap/bin/zm; do
-            [ -x "$p" ] && { _ZM_BIN="$p"; return 0; }
-        done
-        return 1
-    fi
-    return 0
-}
+. "${MODDIR:-/data/adb/modules/scalpel}/core/whiteout_helpers.sh"
 
 mode_probe() {
     local _tag="mode_zeromount"
-    if [ ! -e "/dev/zeromount" ]; then
-        log_d "$_tag" "probe: /dev/zeromount not present"
+    if [ ! -d "/data/adb/modules/zeromount" ]; then
+        log_d "$_tag" "probe: zeromount module not installed"
         return 1
     fi
-    if ! _find_zm; then
-        log_d "$_tag" "probe: zm binary not found"
+    if [ ! -f "$_ZM_SYNC" ]; then
+        log_d "$_tag" "probe: sync.sh not found"
         return 1
     fi
-    log_d "$_tag" "probe: zeromount available (zm=$_ZM_BIN)"
+    log_d "$_tag" "probe: zeromount available (sync.sh)"
     return 0
 }
 
@@ -43,49 +28,56 @@ mode_debloat() {
     [ -z "$pkg" ] && { log_e "$_tag" "debloat called without package name"; return 1; }
     [ -z "$app_path" ] && { log_e "$_tag" "debloat called without app path"; return 1; }
 
-    _find_zm || { log_e "$_tag" "zm binary not found"; return 1; }
+    local moddir="${MODDIR:-/data/adb/modules/scalpel}"
 
-    local app_dir
-    app_dir=$(dirname "$app_path")
+    # Tracking file required for sync.sh to process our module
+    mkdir -p "$(dirname "$_ZM_TRACKING")" 2>/dev/null
+    touch "$_ZM_TRACKING" 2>/dev/null
 
-    # Empty rpath = deletion marker at VFS level
-    if "$_ZM_BIN" add "$app_dir" ""; then
-        log_i "$_tag" "hidden $pkg ($app_dir)"
+    if ! whiteout_create "$moddir" "$app_path"; then
+        log_e "$_tag" "whiteout creation failed: $pkg"
+        return 1
+    fi
+
+    whiteout_fix_vendor_symlinks "$moddir"
+
+    if sh "$_ZM_SYNC" scalpel >/dev/null 2>&1; then
+        log_i "$_tag" "hidden $pkg (via zeromount sync)"
         return 0
     fi
 
-    log_e "$_tag" "failed to hide $pkg ($app_dir)"
+    log_e "$_tag" "sync.sh failed for $pkg"
     return 1
 }
 
 mode_restore() {
     local _tag="mode_zeromount"
-    local pkg="$1" app_path="$2"
+    local pkg="$1" app_path="$2" skip_sync="${3:-}"
     [ -z "$pkg" ] && { log_e "$_tag" "restore: missing package name"; return 1; }
     [ -z "$app_path" ] && { log_e "$_tag" "restore called without app path"; return 1; }
 
-    _find_zm || { log_e "$_tag" "zm binary not found"; return 1; }
+    local moddir="${MODDIR:-/data/adb/modules/scalpel}"
 
-    local app_dir
-    app_dir=$(dirname "$app_path")
+    whiteout_remove "$moddir" "$app_path"
 
-    if "$_ZM_BIN" del "$app_dir"; then
-        log_i "$_tag" "restored $pkg ($app_dir)"
+    # skip_sync=1 used by mode_cleanup for batch efficiency
+    [ "$skip_sync" = "1" ] && { log_d "$_tag" "restored $pkg (sync deferred)"; return 0; }
+
+    if sh "$_ZM_SYNC" scalpel >/dev/null 2>&1; then
+        log_i "$_tag" "restored $pkg (via zeromount sync)"
         return 0
     fi
 
-    log_e "$_tag" "failed to restore $pkg ($app_dir)"
-    return 1
+    log_w "$_tag" "sync.sh failed after restore: $pkg"
+    return 0
 }
 
 mode_verify() {
-    local pkg="$1" app_path="$2"
+    local app_path="$2"
     [ -z "$app_path" ] && return 1
-    local app_dir
-    app_dir=$(dirname "$app_path")
 
-    # VFS interception makes the directory invisible to userspace
-    [ ! -d "$app_dir" ]
+    local moddir="${MODDIR:-/data/adb/modules/scalpel}"
+    whiteout_verify "$moddir" "$app_path"
 }
 
 mode_cleanup() {
@@ -98,7 +90,6 @@ mode_cleanup() {
         return 0
     fi
 
-    # Temp file avoids subshell from pipe (variable mutations lost in pipe)
     local tmp="/data/local/tmp/.scalpel_zm_cleanup_$$"
     "$jq_bin" -r '.[] | "\(.package_name)\t\(.app_path)"' "$SCALPEL_NUKE_LIST" > "$tmp" 2>/dev/null
     if [ ! -s "$tmp" ]; then
@@ -107,12 +98,18 @@ mode_cleanup() {
         return 0
     fi
 
-    local failed=0
+    local failed=0 count=0
     while IFS='	' read -r pkg app_path; do
         [ -z "$pkg" ] && continue
-        mode_restore "$pkg" "$app_path" || failed=1
+        mode_restore "$pkg" "$app_path" 1 || failed=1
+        count=$((count + 1))
     done < "$tmp"
     rm -f "$tmp" 2>/dev/null
+
+    # Single sync after all whiteouts removed
+    if [ "$count" -gt 0 ]; then
+        sh "$_ZM_SYNC" scalpel >/dev/null 2>&1 || log_w "$_tag" "final sync failed"
+    fi
 
     return "$failed"
 }
