@@ -15,7 +15,7 @@ _find_zm() {
         _ZM_BIN="zm"
     else
         local p
-        for p in /data/adb/ksu/bin/zm /data/adb/magisk/zm /data/adb/ap/bin/zm; do
+        for p in /data/adb/modules/zeromount/bin/zm /data/adb/ksu/bin/zm /data/adb/magisk/zm /data/adb/ap/bin/zm; do
             [ -x "$p" ] && { _ZM_BIN="$p"; return 0; }
         done
         return 1
@@ -24,8 +24,17 @@ _find_zm() {
 }
 
 mode_probe() {
-    [ -e "/dev/zeromount" ] || return 1
-    _find_zm
+    local _tag="mode_zeromount"
+    if [ ! -e "/dev/zeromount" ]; then
+        log_d "$_tag" "probe: /dev/zeromount not present"
+        return 1
+    fi
+    if ! _find_zm; then
+        log_d "$_tag" "probe: zm binary not found"
+        return 1
+    fi
+    log_d "$_tag" "probe: zeromount available (zm=$_ZM_BIN)"
+    return 0
 }
 
 mode_debloat() {

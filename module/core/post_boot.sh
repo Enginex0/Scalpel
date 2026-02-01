@@ -8,7 +8,100 @@ SCALPEL_DATA="/data/adb/scalpel"
 STATUS_FILE="${SCALPEL_DATA}/status.json"
 _POST_BOOT_FLAG="${SCALPEL_DATA}/boot_completed_handled"
 
+# Remove Play Store updates from debloated system apps
+_remove_system_updates() {
+    local _tag="post_boot"
+    local nuke_list="${SCALPEL_DATA}/nuke_list.json"
+    [ ! -f "$nuke_list" ] && return 0
+
+    local jq_bin="${MODDIR}/bin/jq"
+    [ ! -x "$jq_bin" ] && jq_bin="jq"
+
+    local pkg_list
+    pkg_list="$("$jq_bin" -r '.[].package_name' "$nuke_list" 2>/dev/null)"
+    [ -z "$pkg_list" ] && return 0
+
+    log_d "$_tag" "checking for system app updates to remove"
+
+    local pkg removed=0
+    for pkg in $pkg_list; do
+        [ -z "$pkg" ] && continue
+        # System app with user updates has path in /data/app
+        if pm list packages -s 2>/dev/null | grep -qx "package:$pkg" \
+           && pm path "$pkg" 2>/dev/null | grep -q "/data/app"; then
+            if pm uninstall-system-updates "$pkg" >/dev/null 2>&1; then
+                log_i "$_tag" "removed updates: $pkg"
+                removed=$((removed + 1))
+            fi
+        fi
+    done
+
+    [ "$removed" -gt 0 ] && log_i "$_tag" "removed $removed system app updates"
+}
+
 # Finish work deferred from post-fs-data: pm deferral, pm failures, timeout partials
+_uninstall_fallback() {
+    local _tag="post_boot"
+    [ "$SCALPEL_UNINSTALL_FALLBACK" != "true" ] && return 0
+
+    local nuke_list="${SCALPEL_DATA}/nuke_list.json"
+    [ ! -f "$nuke_list" ] && return 0
+
+    local jq_bin="${MODDIR}/bin/jq"
+    [ ! -x "$jq_bin" ] && jq_bin="jq"
+
+    local pkg_list installed_list count=0
+    pkg_list="$("$jq_bin" -r '.[].package_name' "$nuke_list" 2>/dev/null)" || return 0
+    installed_list="$(pm list packages 2>/dev/null)" || return 0
+
+    log_i "$_tag" "uninstall fallback: checking for surviving apps"
+
+    local pkg
+    for pkg in $pkg_list; do
+        [ -z "$pkg" ] && continue
+        if echo "$installed_list" | grep -qx "package:$pkg"; then
+            if pm uninstall -k --user 0 "$pkg" >/dev/null 2>&1; then
+                log_i "$_tag" "fallback uninstalled: $pkg"
+                count=$((count + 1))
+            else
+                log_w "$_tag" "fallback failed: $pkg"
+            fi
+        fi
+    done
+
+    [ "$count" -gt 0 ] && log_i "$_tag" "uninstall fallback: removed $count surviving apps"
+}
+
+# Restore non-nuked apps that got uninstalled/disabled as collateral
+_restore_app_states() {
+    local _tag="post_boot"
+    local app_list="${SCALPEL_DATA}/app_list.json"
+    local nuke_list="${SCALPEL_DATA}/nuke_list.json"
+
+    [ ! -f "$app_list" ] && return 0
+
+    local jq_bin="${MODDIR}/bin/jq"
+    [ ! -x "$jq_bin" ] && jq_bin="jq"
+
+    local disabled_list pkg
+    disabled_list=$(pm list packages -d 2>/dev/null)
+
+    while read -r pkg; do
+        [ -z "$pkg" ] && continue
+        if [ -f "$nuke_list" ]; then
+            "$jq_bin" -e --arg p "$pkg" '.[] | select(.package_name == $p)' "$nuke_list" >/dev/null 2>&1 && continue
+        fi
+        if ! pm path "$pkg" >/dev/null 2>&1; then
+            pm install-existing "$pkg" >/dev/null 2>&1 && log_d "$_tag" "restored: $pkg"
+        fi
+        if echo "$disabled_list" | grep -qx "package:$pkg"; then
+            pm enable "$pkg" >/dev/null 2>&1 && log_d "$_tag" "enabled: $pkg"
+        fi
+    done <<EOF
+$("$jq_bin" -r '.[].package_name' "$app_list" 2>/dev/null)
+EOF
+}
+
 _finish_deferred_debloat() {
     local _tag="post_boot"
     local jq_bin="${MODDIR}/bin/jq"
@@ -58,33 +151,7 @@ _finish_deferred_debloat() {
     SCALPEL_NUKE_TIMEOUT="$_prev_timeout"
 }
 
-_update_module_description() {
-    local _tag="post_boot"
-    local jq_bin="${MODDIR}/bin/jq"
-    [ ! -x "$jq_bin" ] && jq_bin="jq"
-    [ ! -f "$STATUS_FILE" ] && return 0
-
-    local debloated verified broken mode
-    debloated="$("$jq_bin" -r '.debloated // 0' "$STATUS_FILE" 2>/dev/null)"
-    verified="$("$jq_bin" -r '.debloat_verified // 0' "$STATUS_FILE" 2>/dev/null)"
-    broken="$("$jq_bin" -r '.debloat_broken // 0' "$STATUS_FILE" 2>/dev/null)"
-    mode="$("$jq_bin" -r '.mode // "?"' "$STATUS_FILE" 2>/dev/null)"
-
-    local desc="${debloated} debloated, ${verified} verified [${mode}]"
-    [ "${broken:-0}" -gt 0 ] && desc="${desc} - ${broken} broken"
-
-    # KSU: native config API avoids modifying module.prop on disk
-    if [ "$KSU" = "true" ] && command -v ksud >/dev/null 2>&1; then
-        ksud module config set override.description "$desc" 2>/dev/null && return 0
-    fi
-
-    # Magisk / APatch fallback: direct module.prop edit (strip sed-unsafe chars)
-    [ ! -f "${MODDIR}/module.prop" ] && return 0
-    local safe_desc
-    safe_desc="$(printf '%s' "$desc" | tr -d '|/&\\')"
-    # tr also strips newlines (theoretical risk if jq field somehow contained CR/LF, but status.json is single-line)
-    sed -i "s|^description=.*|description=${safe_desc}|" "${MODDIR}/module.prop" 2>/dev/null
-}
+# Description updates handled by monitor.sh to avoid duplicate/conflicting updates
 
 # Exactly-once gate: first caller wins, second caller exits early
 _post_boot_acquire() {
@@ -100,8 +167,8 @@ post_boot_run() {
     local _tag="post_boot"
     . "${MODDIR}/core/logging.sh"
     . "${MODDIR}/core/config.sh"
-    config_init 2>/dev/null
-    log_init
+    config_init 2>/dev/null || echo "scalpel[post_boot]: config_init failed (continuing)" > /dev/kmsg
+    log_init 2>/dev/null || echo "scalpel[post_boot]: log_init failed (continuing)" > /dev/kmsg
 
     if ! _post_boot_acquire; then
         log_i "$_tag" "post-boot already handled this cycle, skipping"
@@ -115,12 +182,17 @@ post_boot_run() {
 
     _finish_deferred_debloat
 
+    _remove_system_updates
+
+    _uninstall_fallback
+
+    _restore_app_states
+
     . "${MODDIR}/core/verify.sh"
     verify_run || log_w "$_tag" "verification found issues"
 
-    _update_module_description
-
     . "${MODDIR}/core/monitor.sh"
+    log_d "$_tag" "starting background monitor daemon"
     monitor_start &
 
     log_i "$_tag" "post-boot complete"

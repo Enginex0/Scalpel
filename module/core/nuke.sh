@@ -62,14 +62,21 @@ nuke_run() {
     log_i "$_tag" "starting debloat run"
 
     local _nuke_lock="${SCALPEL_DATA}/nuke.lock"
-    echo "$$" > "$_nuke_lock" 2>/dev/null
+    if ! echo "$$" > "$_nuke_lock" 2>/dev/null; then
+        log_w "$_tag" "failed to create nuke lock (continuing anyway)"
+    fi
 
     # Mark in-flight so service.sh can detect interrupted runs (KSU 10s kill)
+    # Detect mode first so status always shows available mode
+    local mode
+    mode="$(detect_mode)"
+    [ -z "$mode" ] && mode="pm_deferred"
+
     _write_status "running" 0 0
 
     if [ ! -f "$NUKE_LIST" ]; then
         log_i "$_tag" "no nuke list found, nothing to do"
-        _write_status "none" 0 0
+        _write_status "$mode" 0 0
         rm -f "$_nuke_lock"
         return 0
     fi
@@ -91,14 +98,12 @@ nuke_run() {
 
     if [ "$count" = "0" ]; then
         log_i "$_tag" "nuke list empty, nothing to do"
-        _write_status "none" 0 0
+        _write_status "$mode" 0 0
         rm -f "$_nuke_lock"
         return 0
     fi
 
-    local mode
-    mode="$(detect_mode)"
-    if [ -z "$mode" ]; then
+    if [ "$mode" = "pm_deferred" ]; then
         log_i "$_tag" "no filesystem mode available, deferring to service.sh for pm"
         _write_status "pm_deferred" 0 "$count"
         rm -f "$_nuke_lock"
@@ -122,6 +127,41 @@ nuke_run() {
     fi
 
     log_i "$_tag" "mode=$mode apps=$count"
+
+    # Disable-only mode: pm disable each package, skip all filesystem operations
+    if [ "$SCALPEL_DISABLE_ONLY" = "true" ]; then
+        log_i "$_tag" "disable-only mode: skipping filesystem debloat"
+        local success=0 failed=0 pkg
+        while read -r pkg; do
+            [ -z "$pkg" ] && continue
+            if pm disable "$pkg" >/dev/null 2>&1; then
+                success=$((success + 1))
+                log_d "$_tag" "disabled: $pkg"
+            else
+                failed=$((failed + 1))
+                log_w "$_tag" "failed to disable: $pkg"
+            fi
+        done <<EOF
+$("$jq_bin" -r '.[].package_name' "$NUKE_LIST" 2>/dev/null)
+EOF
+        _write_status "pm" "$success" "$failed"
+        rm -f "$_nuke_lock"
+        log_i "$_tag" "disable-only complete: success=$success failed=$failed"
+        [ "$failed" -gt 0 ] && return 1
+        return 0
+    fi
+
+    # Pre-debloat pm disable for immediate UI hiding (system updates handled by post_boot.sh)
+    if [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; then
+        log_d "$_tag" "pre-debloat: disabling packages"
+        local _pkg
+        while read -r _pkg; do
+            [ -z "$_pkg" ] && continue
+            pm disable "$_pkg" >/dev/null 2>&1 || true
+        done <<EOF
+$("$jq_bin" -r '.[].package_name' "$NUKE_LIST" 2>/dev/null)
+EOF
+    fi
 
     local success=0
     local failed=0
@@ -167,6 +207,22 @@ nuke_run() {
 
     rm -f "$tmp"
 
+    # Raw whiteouts: user-defined paths routed through active mode
+    local _raw_file="${SCALPEL_DATA}/raw_whiteouts.txt"
+    if [ -f "$_raw_file" ]; then
+        log_d "$_tag" "processing raw_whiteouts.txt"
+        local _line _raw_pkg
+        while IFS= read -r _line; do
+            case "$_line" in '#'*|'') continue ;; esac
+            _raw_pkg="raw:${_line##*/}"
+            if mode_debloat "$_raw_pkg" "${_line}/_.apk"; then
+                log_d "$_tag" "raw hidden: $_line"
+            else
+                log_w "$_tag" "raw hide failed: $_line"
+            fi
+        done < "$_raw_file"
+    fi
+
     # Vendor symlink fixup runs ONCE after all debloats (not per-app)
     case "$mode" in
         whiteout|magisk)
@@ -177,6 +233,23 @@ nuke_run() {
             type _fix_vendor_symlinks >/dev/null 2>&1 && _fix_vendor_symlinks "${MODDIR}"
             ;;
     esac
+
+    # Re-enable apps from app_list that are disabled but NOT being nuked
+    local _app_list="${SCALPEL_DATA}/app_list.json"
+    if [ -f "$_app_list" ] && [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; then
+        local _disabled_list _app_pkg
+        _disabled_list=$(pm list packages -d 2>/dev/null)
+        while read -r _app_pkg; do
+            [ -z "$_app_pkg" ] && continue
+            "$jq_bin" -e --arg pkg "$_app_pkg" '.[] | select(.package_name == $pkg)' "$NUKE_LIST" >/dev/null 2>&1 && continue
+            if echo "$_disabled_list" | grep -qx "package:$_app_pkg"; then
+                pm enable "$_app_pkg" >/dev/null 2>&1 || true
+                log_d "$_tag" "re-enabled: $_app_pkg"
+            fi
+        done <<EOF
+$("$jq_bin" -r '.[].package_name' "$_app_list" 2>/dev/null)
+EOF
+    fi
 
     _write_status "$mode" "$success" "$failed" "$_timed_out"
     rm -f "$_nuke_lock"

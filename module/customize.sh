@@ -31,29 +31,50 @@ ROOT_MGR=$(detect_root_manager)
 log_i "$TAG" "root_manager=$ROOT_MGR"
 ui_print "  Root manager: $ROOT_MGR"
 
-# Place correct aapt binary for device architecture
-_setup_aapt() {
+# Detect device architecture once
+_get_abi() {
     local abi
     abi=$(getprop ro.product.cpu.abi 2>/dev/null)
     case "$abi" in
-        arm64*) abi="arm64-v8a" ;;
-        armeabi*|arm*) abi="armeabi-v7a" ;;
-        *) log_w "$TAG" "unsupported abi=$abi"; return 1 ;;
+        arm64*) echo "arm64-v8a" ;;
+        armeabi*|arm*) echo "armeabi-v7a" ;;
+        *) echo "" ;;
     esac
-    local src="$MODPATH/bin/${abi}/aapt"
+}
+DEVICE_ABI=$(_get_abi)
+[ -z "$DEVICE_ABI" ] && { log_w "$TAG" "unsupported abi"; }
+
+# Place correct jq binary for device architecture (needed by scanner)
+_setup_jq() {
+    local src="$MODPATH/bin/${DEVICE_ABI}/jq"
+    if [ -f "$src" ]; then
+        cp "$src" "$MODPATH/bin/jq"
+        chmod 0755 "$MODPATH/bin/jq"
+        log_d "$TAG" "jq=$DEVICE_ABI"
+    else
+        log_w "$TAG" "jq binary missing for $DEVICE_ABI"
+    fi
+}
+_setup_jq
+
+# Place correct aapt binary for device architecture
+_setup_aapt() {
+    local src="$MODPATH/bin/${DEVICE_ABI}/aapt"
     if [ -f "$src" ]; then
         mkdir -p "$MODPATH/common"
         cp "$src" "$MODPATH/common/aapt"
         chmod 0755 "$MODPATH/common/aapt"
-        log_d "$TAG" "aapt=$abi"
+        log_d "$TAG" "aapt=$DEVICE_ABI"
     else
-        log_w "$TAG" "aapt binary missing for $abi"
+        log_w "$TAG" "aapt binary missing for $DEVICE_ABI"
     fi
 }
 _setup_aapt
 
 # Categories DB needed by scanner and WebUI
-if [ -f "$MODPATH/webroot/categories.json" ]; then
+if [ -f "$MODPATH/data/categories.json" ]; then
+    cp "$MODPATH/data/categories.json" "$SCALPEL_DATA/categories.json"
+elif [ -f "$MODPATH/webroot/categories.json" ]; then
     cp "$MODPATH/webroot/categories.json" "$SCALPEL_DATA/categories.json"
 fi
 
@@ -63,13 +84,111 @@ MODDIR="$MODPATH"
 
 ui_print "  Scanning system apps..."
 if scanner_run; then
-    _app_count=$(jq 'length' "$SCALPEL_DATA/app_list.json" 2>/dev/null)
+    _app_count=$("$MODPATH/bin/jq" 'length' "$SCALPEL_DATA/app_list.json" 2>/dev/null)
     ui_print "  Found ${_app_count:-0} system apps (cached)"
     log_i "$TAG" "scan: ${_app_count:-0} apps"
 else
     ui_print "  Scan completed with warnings"
     log_w "$TAG" "scanner returned non-zero"
 fi
+
+# Detect capabilities and show user what mode will be used
+ui_print ""
+ui_print "  Detecting system capabilities..."
+
+_detect_capabilities() {
+    local _mode=""
+
+    # Check ZeroMount (highest priority)
+    if [ -e "/dev/zeromount" ]; then
+        local _zm=""
+        command -v zm >/dev/null 2>&1 && _zm="zm"
+        [ -z "$_zm" ] && [ -x "/data/adb/modules/zeromount/bin/zm" ] && _zm="found"
+        [ -z "$_zm" ] && [ -x "/data/adb/ksu/bin/zm" ] && _zm="found"
+        if [ -n "$_zm" ]; then
+            _mode="zeromount"
+            ui_print "  [✓] ZeroMount VFS available (best stealth)"
+        fi
+    fi
+
+    # Check overlayfs support
+    local _has_overlayfs="false"
+    if grep -q "overlay" /proc/filesystems 2>/dev/null; then
+        _has_overlayfs="true"
+        log_d "$TAG" "overlayfs supported"
+    fi
+
+    # Check tmpfs xattr support (needed for whiteout mode)
+    local _has_xattr="false"
+    local _mnt_dir=""
+    [ -w /mnt/vendor ] && _mnt_dir="/mnt/vendor"
+    [ -z "$_mnt_dir" ] && [ -w /mnt ] && _mnt_dir="/mnt"
+    [ -z "$_mnt_dir" ] && [ -w /dev ] && _mnt_dir="/dev"
+
+    if [ -n "$_mnt_dir" ]; then
+        local _tf="${_mnt_dir}/.scalpel_xattr_test"
+        rm -f "$_tf" 2>/dev/null
+        if busybox mknod "$_tf" c 0 0 2>/dev/null; then
+            if busybox setfattr -n trusted.overlay.whiteout -v y "$_tf" 2>/dev/null; then
+                _has_xattr="true"
+                log_d "$TAG" "tmpfs xattr supported"
+            fi
+            rm -f "$_tf" 2>/dev/null
+        fi
+    fi
+
+    # Check busybox for tmpfs mount (mountify mode)
+    local _has_busybox="false"
+    if command -v busybox >/dev/null 2>&1 || [ -x "/data/adb/ksu/bin/busybox" ] || [ -x "/data/adb/magisk/busybox" ]; then
+        _has_busybox="true"
+    fi
+
+    # Check magic mount capability
+    local _has_magic="false"
+    if [ "$ROOT_MGR" = "magisk" ]; then
+        _has_magic="true"
+    elif [ "$ROOT_MGR" = "ksu" ]; then
+        [ "$KSU_MAGIC_MOUNT" = "true" ] && _has_magic="true"
+        [ -n "$KSU_VER_CODE" ] && [ "$KSU_VER_CODE" -ge 22098 ] 2>/dev/null && _has_magic="true"
+    elif [ "$ROOT_MGR" = "apatch" ]; then
+        [ "$APATCH_BIND_MOUNT" = "true" ] && _has_magic="true"
+    fi
+
+    # Report detected mode (if zeromount not already detected)
+    if [ -z "$_mode" ]; then
+        if [ "$_has_busybox" = "true" ]; then
+            _mode="mountify"
+            ui_print "  [✓] Mountify (tmpfs overlay) available"
+        elif [ "$_has_overlayfs" = "true" ]; then
+            _mode="symlink"
+            ui_print "  [✓] Symlink overlay available"
+        elif [ "$_has_overlayfs" = "true" ] && [ "$_has_xattr" = "true" ]; then
+            _mode="whiteout"
+            ui_print "  [✓] OverlayFS whiteout available"
+        elif [ "$_has_magic" = "true" ]; then
+            _mode="magisk"
+            ui_print "  [✓] Magic mount available"
+        else
+            _mode="pm"
+            ui_print "  [!] Fallback to pm disable (least stealthy)"
+        fi
+    fi
+
+    # Additional capability warnings
+    [ "$_has_overlayfs" = "false" ] && ui_print "  [i] No overlayfs (kernel limitation)"
+    [ "$_has_xattr" = "false" ] && [ "$_has_overlayfs" = "true" ] && ui_print "  [i] No xattr support (whiteout unavailable)"
+
+    log_i "$TAG" "detected_mode=$_mode overlayfs=$_has_overlayfs xattr=$_has_xattr magic=$_has_magic"
+
+    # Write initial status.json so WebUI shows mode before first boot
+    local _jq="${MODPATH}/bin/jq"
+    [ ! -x "$_jq" ] && _jq="jq"
+    "$_jq" -n \
+        --arg mode "$_mode" \
+        '{mode:$mode,debloated:0,debloat_failed:0,systemized:0,partial:false,last_nuke:"never",timestamp:0}' \
+        > "${SCALPEL_DATA}/status.json" 2>/dev/null
+}
+_detect_capabilities
 
 # Volume key: UP = apply default debloat, DOWN/timeout = skip (safe default)
 ui_print ""

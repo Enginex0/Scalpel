@@ -6,6 +6,7 @@
 
 MODPATH="${MODPATH:-${0%/*}}"
 SCALPEL_DATA="/data/adb/scalpel"
+APP_LIST="${SCALPEL_DATA}/app_list.json"
 NUKE_LIST="${SCALPEL_DATA}/nuke_list.json"
 SYSTEMIZE_LIST="${SCALPEL_DATA}/systemize_list.json"
 
@@ -24,22 +25,26 @@ if [ -f "$_pid_file" ]; then
     rm -f "$_pid_file"
 fi
 
-# Restore debloated apps — pm install-existing makes PMS re-discover the package;
-# pm enable covers pm-mode disabled apps that were never overlay-hidden
+# Restore debloated apps from both app_list.json and nuke_list.json
 _tmp_pkgs="/data/local/tmp/scalpel_uninstall.$$"
-if [ -f "$NUKE_LIST" ] && "$_jq" -e '.' "$NUKE_LIST" >/dev/null 2>&1; then
+: > "$_tmp_pkgs"
+for _list in "$APP_LIST" "$NUKE_LIST"; do
+    [ -f "$_list" ] && "$_jq" -e '.' "$_list" >/dev/null 2>&1 && \
+        "$_jq" -r '.[].package_name' "$_list" >> "$_tmp_pkgs" 2>/dev/null
+done
+
+if [ -s "$_tmp_pkgs" ]; then
     _log "restoring debloated apps"
-    "$_jq" -r '.[].package_name' "$NUKE_LIST" > "$_tmp_pkgs" 2>/dev/null
     _restore_fail=0
-    while IFS= read -r pkg; do
+    sort -u "$_tmp_pkgs" | while IFS= read -r pkg; do
         [ -z "$pkg" ] && continue
         if ! pm install-existing "$pkg" >/dev/null 2>&1; then
             pm enable "$pkg" >/dev/null 2>&1 || { _restore_fail=$((_restore_fail + 1)); _log "failed to restore: $pkg"; }
         fi
-    done < "$_tmp_pkgs"
+    done
     [ "$_restore_fail" -gt 0 ] && _log "WARNING: ${_restore_fail} packages failed to restore"
-    rm -f "$_tmp_pkgs"
 fi
+rm -f "$_tmp_pkgs"
 
 # Restore systemized apps — root manager removes the /system/priv-app overlay;
 # pm install-existing re-registers the preserved /data/app copy with PMS
