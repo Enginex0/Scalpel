@@ -58,7 +58,7 @@ promote_app() {
 
     # Directory name must be a valid filesystem path (no spaces/special chars)
     local app_name
-    app_name="$(basename "$app_dir" | sed 's/-[a-zA-Z0-9_]*$//')"
+    app_name="$(basename "$app_dir" | sed 's/-[a-zA-Z0-9_=]*$//')"
     [ -z "$app_name" ] || [ "$app_name" = "." ] && app_name="${pkg##*.}"
 
     # Human-readable label for JSON record (WebUI display)
@@ -208,8 +208,11 @@ verify_promotion() {
 # Only execute when run directly
 case "${0##*/}" in
     promote.sh)
+        . "${MODDIR}/core/config.sh"
+        config_init 2>/dev/null
         . "${MODDIR}/core/logging.sh"
         log_init 2>/dev/null
+        . "${MODDIR}/core/detect.sh"
         case "$1" in
             promote) shift; promote_app "$@" ;;
             demote)  shift; demote_app "$@" ;;

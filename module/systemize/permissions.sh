@@ -28,7 +28,13 @@ generate_permissions() {
     [ -n "$perms" ] && perm_count=$(echo "$perms" | wc -l)
 
     if [ "$perm_count" -eq 0 ]; then
-        log_w "$_tag" "no permissions extracted for $pkg -- XML will be empty"
+        local enforce
+        enforce="$(getprop ro.control_privapp_permissions 2>/dev/null)"
+        if [ "$enforce" = "enforce" ]; then
+            log_e "$_tag" "BLOCKED: zero permissions for $pkg (enforce mode) — empty XML would crash PMS"
+            return 1
+        fi
+        log_w "$_tag" "zero permissions for $pkg (enforce=$enforce) — generating permissive XML"
     fi
 
     _write_xml "$pkg" "$perms" "$xml_file" || return 1
@@ -74,7 +80,10 @@ _extract_permissions() {
     local pkg="$2"
     local aapt_bin=""
 
-    # detect_aapt is from core/detect.sh (sourced before us)
+    # Self-source detect.sh if not already loaded (WebUI invokes promote.sh directly)
+    if ! type detect_aapt >/dev/null 2>&1; then
+        [ -f "${MODDIR}/core/detect.sh" ] && . "${MODDIR}/core/detect.sh"
+    fi
     if type detect_aapt >/dev/null 2>&1; then
         aapt_bin=$(detect_aapt)
     fi
@@ -90,11 +99,13 @@ _extract_permissions() {
         log_w "$_tag" "aapt returned empty output for $apk"
     fi
 
-    # Fallback: extract from dumpsys package (only works if app is already installed)
+    # Fallback: parse "requested permissions:" section from dumpsys (all namespaces)
     local dump_perms
     dump_perms=$(dumpsys package "$pkg" 2>/dev/null \
-        | grep 'android\.permission\.' \
-        | sed 's/.*\(android\.permission\.[A-Z_]*\).*/\1/' \
+        | sed -n '/requested permissions:/,/^[^ ]/p' \
+        | grep '^\s' \
+        | sed 's/^[[:space:]]*//' \
+        | grep -v '^$' \
         | sort -u)
 
     if [ -n "$dump_perms" ]; then
