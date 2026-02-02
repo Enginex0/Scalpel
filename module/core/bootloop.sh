@@ -16,7 +16,10 @@ _bl_log() {
 }
 
 _bl_write_count() {
-    echo "BOOTCOUNT=$1" > "$BOOTLOOP_COUNT_FILE" 2>/dev/null
+    echo "BOOTCOUNT=$1" > "$BOOTLOOP_COUNT_FILE" 2>/dev/null || {
+        _bl_log "FATAL cannot write boot counter to $BOOTLOOP_COUNT_FILE"
+        return 1
+    }
 }
 
 # Force reboot -- safe at post-fs-data (no setprop, it deadlocks KSU)
@@ -31,7 +34,9 @@ _bl_reboot() {
 
 # Read counter, increment, persist. Called from post-fs-data.sh.
 bootloop_init() {
-    mkdir -p "/data/adb/scalpel" 2>/dev/null
+    mkdir -p "/data/adb/scalpel" 2>/dev/null || {
+        _bl_log "WARN cannot create /data/adb/scalpel directory"
+    }
 
     BOOTCOUNT=0
     if [ -f "$BOOTLOOP_COUNT_FILE" ]; then
@@ -63,7 +68,7 @@ bootloop_check() {
             rm -rf "${MODDIR:?}/${dir}" 2>/dev/null
         done
 
-        touch "$MODDIR/disable"
+        touch "$MODDIR/disable" || _bl_log "WARN failed to create disable marker"
 
         # Inform user via module description
         local _bl_desc="Bootloop protection triggered. Module disabled. Re-enable manually."

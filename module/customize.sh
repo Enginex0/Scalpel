@@ -92,6 +92,8 @@ else
     log_w "$TAG" "scanner returned non-zero"
 fi
 
+mkdir -p "$SCALPEL_DATA/icons"
+
 # Detect capabilities and show user what mode will be used
 ui_print ""
 ui_print "  Detecting system capabilities..."
@@ -266,13 +268,16 @@ if [ -n "$KSU" ] || [ -n "$APATCH" ]; then
     rm -f "$MODPATH/action.sh" 2>/dev/null
 fi
 
-# Permissions
+# Permissions (set webroot perms BEFORE symlink creation to avoid following into data dir)
 ui_print ""
 ui_print "  Setting permissions..."
 set_perm_recursive "$MODPATH" 0 0 0755 0644
 [ -f "$MODPATH/common/aapt" ] && set_perm "$MODPATH/common/aapt" 0 0 0755
 [ -f "$MODPATH/bin/jq" ] && set_perm "$MODPATH/bin/jq" 0 0 0755
-[ -d "$MODPATH/webroot" ] && set_perm_recursive "$MODPATH/webroot" 0 0 0755 0644
+
+# Symlink AFTER permissions to prevent set_perm_recursive following into data dir
+ln -sf "$SCALPEL_DATA/icons" "$MODPATH/webroot/icons"
+log_d "$TAG" "symlink: webroot/icons -> $SCALPEL_DATA/icons"
 
 ui_print ""
 ui_print "  Installation complete -- reboot to activate"

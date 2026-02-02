@@ -25,10 +25,24 @@ _ensure_helpers() {
 }
 
 mode_probe() {
-    grep -qF "overlay" /proc/filesystems 2>/dev/null || return 1
-    command -v busybox >/dev/null 2>&1 || return 1
-    busybox --list 2>&1 | grep -qF "mknod" || return 1
-    busybox --list 2>&1 | grep -qF "setfattr" || return 1
+    local _tag="mode_whiteout"
+    if ! grep -qF "overlay" /proc/filesystems 2>/dev/null; then
+        log_d "$_tag" "probe: overlayfs not in /proc/filesystems"
+        return 1
+    fi
+    if ! command -v busybox >/dev/null 2>&1; then
+        log_d "$_tag" "probe: busybox not found"
+        return 1
+    fi
+    if ! busybox --list 2>&1 | grep -qF "mknod"; then
+        log_d "$_tag" "probe: busybox lacks mknod"
+        return 1
+    fi
+    if ! busybox --list 2>&1 | grep -qF "setfattr"; then
+        log_d "$_tag" "probe: busybox lacks setfattr"
+        return 1
+    fi
+    log_d "$_tag" "probe: all checks passed"
     return 0
 }
 

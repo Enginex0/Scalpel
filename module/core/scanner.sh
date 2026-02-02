@@ -8,7 +8,14 @@ ICON_DIR="$SCALPEL_DIR/icons"
 CATEGORIES="$SCALPEL_DIR/categories.json"
 
 [ -z "$MODDIR" ] && MODDIR="${0%/*}/.."
-CATEGORIES_FALLBACK="$MODDIR/webroot/categories.json"
+CATEGORIES_FALLBACK="$MODDIR/data/categories.json"
+
+# Use module's jq binary
+_jq() {
+    local jq_bin="$MODDIR/bin/jq"
+    [ ! -x "$jq_bin" ] && jq_bin="jq"
+    "$jq_bin" "$@"
+}
 
 _scan_partitions() {
     local parts=""
@@ -58,7 +65,7 @@ _is_split_apk() {
 _get_category() {
     [ -z "$2" ] && { echo "unknown"; return; }
     local r
-    r=$(jq -r --arg p "$1" '.apps[$p] // "unknown"' "$2" 2>/dev/null)
+    r=$(_jq -r --arg p "$1" '.apps[$p] // "unknown"' "$2" 2>/dev/null)
     echo "${r:-unknown}"
 }
 
@@ -74,6 +81,7 @@ _get_app_name() {
 }
 
 _extract_icon() {
+    case "$2" in */* | *..* | "" ) return 1 ;; esac
     local out="$ICON_DIR/${2}.png"
     [ -f "$out" ] && return 0
     [ -z "$3" ] && return 0
@@ -81,7 +89,12 @@ _extract_icon() {
     ip=$("$3" dump badging "$1" 2>/dev/null | \
         sed -n "s/.*icon='\([^']*\)'.*/\1/p" | head -1)
     [ -z "$ip" ] && return 0
+    case "$ip" in *.xml) return 0 ;; esac
     unzip -p "$1" "$ip" > "$out" 2>/dev/null || rm -f "$out" 2>/dev/null
+    [ ! -s "$out" ] && { rm -f "$out" 2>/dev/null; return 1; }
+    local magic
+    magic=$(od -An -tx1 -N4 "$out" 2>/dev/null | tr -d ' ')
+    [ "$magic" != "89504e47" ] && rm -f "$out" 2>/dev/null
 }
 
 scanner_run() {
@@ -155,7 +168,7 @@ scanner_run() {
                 local split=false; _is_split_apk "$app_dir" && split=true
 
                 # Write one JSON object per line (assembled later)
-                printf '%s\n' "$(jq -n --arg pn "$pkg" --arg an "$aname" --arg ap "$apk" \
+                printf '%s\n' "$(_jq -n --arg pn "$pkg" --arg an "$aname" --arg ap "$apk" \
                     --arg pt "$pname" --arg ct "$cat" --argjson ip "$priv" --argjson is "$split" \
                     '{"package_name":$pn,"app_name":$an,"app_path":$ap,"partition":$pt,"category":$ct,"is_priv_app":$ip,"is_split":$is}')" \
                     >> "$entries"
@@ -170,7 +183,7 @@ scanner_run() {
     wait
 
     # Single jq call: slurp all objects into an array, atomic write
-    jq -s '.' "$entries" > "$APP_LIST.tmp" 2>/dev/null && mv "$APP_LIST.tmp" "$APP_LIST"
+    _jq -s '.' "$entries" > "$APP_LIST.tmp" 2>/dev/null && mv "$APP_LIST.tmp" "$APP_LIST"
     rm -f "$entries" "$APP_LIST.tmp" 2>/dev/null
 
     local elapsed=$(( $(date +%s 2>/dev/null) - t0 ))
@@ -184,8 +197,74 @@ scanner_refresh() {
     scanner_run
 }
 
-# Direct invocation from WebUI bridge or customize.sh
+# On-demand icon regeneration -- called from WebUI "Refresh Icons" button
+# Reads app_list.json, extracts icons only for apps missing them
+_regenerate_icons() {
+    local _tag="scanner"
+    local lockfile="${ICON_DIR}/.regen.lock"
+    exec 9>"$lockfile"
+    flock -n 9 || { log_w "$_tag" "icon regeneration already running"; echo "0"; return 0; }
+    log_i "$_tag" "icon regeneration started"
+
+    if [ ! -f "$APP_LIST" ]; then
+        log_w "$_tag" "no app_list.json — run a full scan first"
+        echo "0"
+        return 0
+    fi
+
+    local aapt=""
+    command -v detect_aapt >/dev/null 2>&1 && aapt=$(detect_aapt)
+    if [ -z "$aapt" ]; then
+        log_w "$_tag" "aapt not available — cannot extract icons"
+        echo "0"
+        return 0
+    fi
+
+    mkdir -p "$ICON_DIR" 2>/dev/null
+
+    local total generated=0 i=0
+    total=$(_jq -r 'length' "$APP_LIST" 2>/dev/null) || total=0
+    [ "$total" -eq 0 ] && { log_i "$_tag" "app_list.json is empty"; echo "0"; return 0; }
+
+    local jq_output
+    jq_output=$(_jq -r '.[] | "\(.package_name)|\(.app_path)"' "$APP_LIST" 2>/dev/null)
+    if [ -z "$jq_output" ] && [ "$total" -gt 0 ]; then
+        log_e "$_tag" "failed to parse app_list.json"
+        echo "0"
+        return 1
+    fi
+
+    while IFS='|' read -r pkg app_path; do
+        i=$((i + 1))
+        [ -z "$pkg" ] && continue
+        if [ ! -f "$ICON_DIR/${pkg}.png" ]; then
+            _extract_icon "$app_path" "$pkg" "$aapt"
+            [ -f "$ICON_DIR/${pkg}.png" ] && generated=$((generated + 1))
+        fi
+        [ $((i % 10)) -eq 0 ] && log_d "$_tag" "regenerating icons: $i/$total"
+    done <<EOF
+$jq_output
+EOF
+
+    log_i "$_tag" "icon regeneration complete: $generated new icons from $total apps"
+    echo "$generated"
+    return 0
+}
+
+# Direct invocation from WebUI bridge
+_init_standalone() {
+    [ -z "$MODDIR" ] && MODDIR="/data/adb/modules/scalpel"
+    if ! command -v log_i >/dev/null 2>&1; then
+        . "$MODDIR/core/config.sh"
+        config_init 2>/dev/null
+        . "$MODDIR/core/logging.sh"
+        log_init 2>/dev/null
+        . "$MODDIR/core/detect.sh"
+    fi
+}
+
 case "${1:-}" in
-    refresh) scanner_refresh ;;
-    run)     scanner_run ;;
+    refresh) _init_standalone; scanner_refresh ;;
+    run)     _init_standalone; scanner_run ;;
+    icons)   _init_standalone; _regenerate_icons ;;
 esac

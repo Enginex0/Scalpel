@@ -14,19 +14,24 @@ _mf_ensure_tracking() {
 }
 
 mode_probe() {
-    # Stale tracking from previous boot is meaningless -- tmpfs mounts don't survive reboot
+    local _tag="mountify"
     rm -f "$_MF_TRACKING" 2>/dev/null
 
     local test_dir="/dev/.scalpel_mf_probe_$$"
-    mkdir -p "$test_dir" 2>/dev/null || return 1
+    if ! mkdir -p "$test_dir" 2>/dev/null; then
+        log_d "$_tag" "probe: cannot create test dir $test_dir"
+        return 1
+    fi
 
     if ! busybox mount -t tmpfs -o size=0 tmpfs "$test_dir" 2>/dev/null; then
+        log_d "$_tag" "probe: tmpfs mount failed"
         rmdir "$test_dir" 2>/dev/null
         return 1
     fi
 
     busybox umount "$test_dir" 2>/dev/null
     rmdir "$test_dir" 2>/dev/null
+    log_d "$_tag" "probe: tmpfs mount available"
     return 0
 }
 
@@ -51,12 +56,15 @@ mode_debloat() {
     ctx=$(ls -Zd "$app_dir" 2>/dev/null | awk '{print $1}')
 
     local mount_opts="size=0,mode=755"
-    [ -n "$ctx" ] && [ "$ctx" != "?" ] && mount_opts="${mount_opts},context=${ctx}"
 
     if ! busybox mount -t tmpfs -o "$mount_opts" tmpfs "$app_dir"; then
         log_e "$_tag" "mount failed for $pkg ($app_dir)"
         return 1
     fi
+
+    # KernelSU lacks CAP_MAC_ADMIN for context= mount option
+    [ -n "$ctx" ] && [ "$ctx" != "?" ] && \
+        chcon "$ctx" "$app_dir" 2>/dev/null
 
     _mf_ensure_tracking
     # Dedup before appending

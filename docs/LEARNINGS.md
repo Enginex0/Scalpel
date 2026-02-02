@@ -33,6 +33,216 @@
 
 <!-- Newest first -->
 
+### 2026-02-01: ZeroMount is VFS REDIRECTION, not hiding — SUSFS handles hiding
+
+**What happened:**
+Implementing ZeroMount integration mode for top-tier detection resistance.
+
+**What went wrong / surprised:**
+Initial implementation used `zm add /path ""` expecting it to hide the path. This created a broken redirect where the original path was still visible. Testing revealed ZeroMount doesn't hide paths — it REDIRECTS them (replace file A with file B at the VFS layer).
+
+**Root cause:**
+ZeroMount (zm) is specifically designed for VFS path redirection: `zm add /source /target` makes reads of /source return contents of /target. An empty target (`""`) doesn't hide the path — it creates a broken redirect. ZeroMount's own metamount.sh uses SUSFS (`ksu_susfs add_sus_path`) for actual path hiding, not zm.
+
+**Lesson:**
+- ZeroMount (`zm add`) = VFS REDIRECTION (replace file A with file B)
+- SUSFS (`ksu_susfs add_sus_path`) = Kernel-level HIDING (path disappears)
+- For debloating, create whiteouts in module directory and call ZeroMount's sync.sh
+- ZeroMount detects whiteouts and handles SUSFS internally — never call SUSFS directly
+
+**Action taken:**
+Rewrote mode_zeromount.sh to:
+1. Create char device (c 0 0) whiteout in module directory
+2. Create tracking file at `/data/adb/zeromount/module_paths/scalpel`
+3. Call `sync.sh scalpel` to trigger ZeroMount reprocessing
+4. ZeroMount handles SUSFS internally based on whiteout detection
+
+---
+
+### 2026-02-01: Frontend logging can write to backend via ksuExec
+
+**What happened:**
+Implementing unified logging across frontend (TypeScript) and backend (shell).
+
+**What went wrong / surprised:**
+Frontend console.log() is invisible on device — only visible in browser DevTools. Needed a way to see frontend logs in the same debug.log file as backend logs.
+
+**Root cause:**
+KSU WebView doesn't expose console output. The only way to persist frontend logs is to write them to the filesystem via the KSU exec API.
+
+**Lesson:**
+Frontend can write to backend log via:
+```typescript
+ksuExec(`echo "[webui:tag] message" >> /data/adb/scalpel/debug.log`)
+```
+This creates unified logging where both frontend errors and backend operations appear in the same timeline.
+
+**Action taken:**
+Created `logger.ts` with 5 levels (debug/info/warn/error/fatal) that writes to both console and backend debug.log via ksuExec.
+
+---
+
+### 2026-02-01: Monitor daemon needs supervisor for self-healing
+
+**What happened:**
+Testing monitor daemon stability on device over extended periods.
+
+**What went wrong / surprised:**
+Android can OOM-kill background processes, especially shell scripts running in the background. If monitor dies, no process restarts it — the module appears "dead" until next reboot.
+
+**Root cause:**
+Unlike systemd or init.d services, KernelSU module scripts have no built-in process supervision. A killed background process stays dead.
+
+**Lesson:**
+Implement self-healing via supervisor wrapper:
+```shell
+monitor_supervised() {
+    local restarts=0 max_restarts=10 cooldown=60
+    while [ "$restarts" -lt "$max_restarts" ]; do
+        monitor_main  # exits on error
+        ((restarts++))
+        sleep "$cooldown"
+    done
+}
+```
+This auto-restarts crashed monitor with cooldown to prevent restart loops.
+
+**Action taken:**
+Added `monitor_supervised()` wrapper in monitor.sh. Service.sh calls supervised version. Max 10 restarts with 60s cooldown between each.
+
+---
+
+### 2026-02-01: Surgical accent names reinforce medical/precision identity
+
+**What happened:**
+Defining accent color presets for the Scalpel WebUI.
+
+**What went wrong / surprised:**
+Generic color names (Red, Blue, Gray) felt flat. Naming them after surgical/medical concepts (Arterial, Vein, Steel, Cautery, Bile, Anesthetic, Plasma, Bone) created a cohesive identity.
+
+**Root cause:**
+Naming is branding. When color presets are just hex values, users see "a red" or "a blue." When named Arterial or Vein, the color carries meaning and reinforces the tool's identity.
+
+**Lesson:**
+Name UI elements to reinforce product identity. For Scalpel (surgical precision tool), use medical terminology. This extends to animations (incision, glint), icons (blade mark), and effects (risk-bleeding).
+
+**Action taken:**
+All 8 accent presets named with surgical terms. Picker shows both name and swatch.
+
+---
+
+### 2026-02-01: Risk-bleeding animations provide visual warning before user action
+
+**What happened:**
+Adding confirmation dialogs for dangerous operations (nuke, batch delete).
+
+**What went wrong / surprised:**
+Standard confirmation dialogs are easily dismissed. Adding a "bleeding" pulse animation (red or amber glow that pulses outward) creates visceral hesitation before confirming.
+
+**Root cause:**
+Humans respond to visual motion and color. A static "Are you sure?" is cognitively processed. A pulsing red border is emotionally processed — it feels dangerous.
+
+**Lesson:**
+For destructive operations, add motion to the warning. The bleedRed/bleedAmber animations (CSS @keyframes with box-shadow pulse) create appropriate hesitation without blocking the user.
+
+**Action taken:**
+Nuke confirmation and batch operations use risk-bleeding animations.
+
+---
+
+### 2026-02-01: Incision clip-path animation creates signature reveal effect for bottom sheets
+
+**What happened:**
+Implementing bottom sheet reveal animations for detail panels.
+
+**What went wrong / surprised:**
+Standard slide-up or fade-in felt generic. Using clip-path to animate from a thin horizontal line (like a surgical incision) to full height created a distinctive reveal that matched the Scalpel identity.
+
+**Root cause:**
+clip-path allows animating the visible area of an element. Transitioning from `inset(0 0 100% 0)` (nothing visible) through `inset(0 0 97% 0)` (thin line) to `inset(0)` (full panel) creates a "cutting open" effect.
+
+**Lesson:**
+Signature animations should reflect product identity. For Scalpel, the incision reveal reinforces the surgical metaphor. clip-path animations are smooth and performant on modern browsers.
+
+**Action taken:**
+Bottom sheets and modal reveals use incision clip-path animation.
+
+---
+
+### 2026-02-01: Auto theme should map to dark, not AMOLED
+
+**What happened:**
+Adding a 4th theme option (auto) that follows system preference.
+
+**What went wrong / surprised:**
+Initially mapped auto+dark-preference to AMOLED (pure black). This was wrong — AMOLED is an explicit power-saving choice, not a reasonable default for "dark mode."
+
+**Root cause:**
+AMOLED black (#000000) is harsh and not all users want it. Standard dark mode uses dark grays (#121212, #1e1e1e) which are easier on the eyes. Auto should give the "normal" dark experience.
+
+**Lesson:**
+Auto theme should map to the mainstream option (dark), not the extreme option (AMOLED). AMOLED is for users who explicitly choose battery savings over visual comfort.
+
+**Action taken:**
+Auto theme maps dark preference to 'dark' theme, not 'amoled'.
+
+---
+
+### 2026-02-01: Theme object reference equality breaks with spread copies
+
+**What happened:**
+Implementing theme switching with a reactive store.
+
+**What went wrong / surprised:**
+Comparing `currentTheme === themes.dark` failed after spreading the theme object. The spread created a new object reference, so reference equality (`===`) was false even when values matched.
+
+**Root cause:**
+JavaScript objects are compared by reference, not value. `{...themes.dark} !== themes.dark` even though all properties are identical. Theme lookup by object reference fails after any object manipulation.
+
+**Lesson:**
+Use a stable identifier (string name) for comparisons, not object references. Store `themeName: string` in state, look up the theme object by name when needed.
+
+**Action taken:**
+Theme comparison uses `.name` property instead of object reference equality.
+
+---
+
+### 2026-02-01: Builder agents invent schemas instead of transcribing from source of truth
+
+**What happened:**
+3 different WebUI proposals built types.ts files that deviated from FOUNDATION.md's data contracts.
+
+**What went wrong / surprised:**
+Each proposal invented different interfaces with different field names, types, and structures. None matched the source of truth exactly. Validation found mismatches in all 3.
+
+**Root cause:**
+Builder agents optimize for "getting it working" not "matching the spec exactly." They infer types from usage rather than transcribing from documentation.
+
+**Lesson:**
+Always require explicit cross-reference validation against the source of truth. A "contract compliance gate" must be part of the audit process, comparing generated types to documented schemas field-by-field.
+
+**Action taken:**
+Added contract compliance as a mandatory audit gate. Validation now includes field-by-field comparison to FOUNDATION.md.
+
+---
+
+### 2026-02-01: 3-gate self-audit without contract-compliance gate is insufficient
+
+**What happened:**
+Initial 3-gate audit (Visual, Functional, Expressionist) passed, but Playwright validation found data contract violations.
+
+**What went wrong / surprised:**
+The 3 gates verified the UI looked right, worked right, and felt right — but not that it used the right data structures. Type mismatches, missing fields, and schema deviations slipped through.
+
+**Root cause:**
+Visual and functional gates test the output (what user sees). Contract compliance tests the input (what data structures are used). Both are needed.
+
+**Lesson:**
+Add a 4th gate: Schema Verification. Compare generated types/interfaces to the documented data contracts before any other validation. This catches mismatches before they propagate to components.
+
+**Action taken:**
+Future audits include schema verification as the first gate, before visual/functional testing.
+
 ### 2026-02-01: Module overlay with empty opaque directory hides app contents
 
 **What happened:**

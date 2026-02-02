@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # shellcheck shell=bash disable=SC3043,SC1090,SC2016
-# Clinical systemization — copy APK, set perms, pm uninstall -k, verify FLAG_SYSTEM
+# Clinical systemization — copy APK, set perms, defer pm uninstall to post-boot after overlay verified
 
 MODDIR="${MODDIR:-$(dirname "$(dirname "$(readlink -f "$0")")")}"
 SCALPEL_DATA="/data/adb/scalpel"
@@ -22,7 +22,15 @@ _ensure_logging() {
 promote_app() {
     local _tag="promote"
     local pkg="$1"
+    local target="${2:-priv-app}"
+    local app_label="$3"
     [ -z "$pkg" ] && { log_e "$_tag" "missing package name"; return 1; }
+
+    case "$target" in
+        app|priv-app) ;;
+        *) log_e "$_tag" "invalid target: $target (must be 'app' or 'priv-app')"; return 1 ;;
+    esac
+
     _ensure_logging
 
     # 1: Validate — installed, user-app, not already system
@@ -41,12 +49,28 @@ promote_app() {
     app_dir="$(dirname "$first_path")"
     [ ! -d "$app_dir" ] && { log_e "$_tag" "app dir missing: $app_dir"; return 1; }
 
+    # Only user-installed apps (/data/app/) can be promoted — preloaded apps on
+    # read-only partitions (/cust, /product, /vendor) create duplicate packages in PMS
+    case "$first_path" in
+        /data/app/*) ;;
+        *) log_e "$_tag" "not a user app: $pkg ($first_path)"; return 1 ;;
+    esac
+
+    # Directory name must be a valid filesystem path (no spaces/special chars)
     local app_name
     app_name="$(basename "$app_dir" | sed 's/-[a-zA-Z0-9_]*$//')"
     [ -z "$app_name" ] || [ "$app_name" = "." ] && app_name="${pkg##*.}"
 
-    # 3: Create target in module overlay — always priv-app for elevated permissions
-    local target_dir="${MODDIR}/system/priv-app/${app_name}"
+    # Human-readable label for JSON record (WebUI display)
+    local display_name
+    if [ -n "$app_label" ]; then
+        display_name="$app_label"
+    else
+        display_name="$app_name"
+    fi
+
+    # 3: Create target in module overlay
+    local target_dir="${MODDIR}/system/${target}/${app_name}"
     mkdir -p "$target_dir" || { log_e "$_tag" "cannot create: $target_dir"; return 1; }
 
     # 4: Copy ALL APKs (base + config splits)
@@ -71,23 +95,19 @@ promote_app() {
     # 6: SELinux context
     chcon -R 'u:object_r:system_file:s0' "$target_dir" 2>/dev/null
 
-    # 7: Priv-app permissions XML (delegate to permissions.sh)
-    local perm_script="${MODDIR}/systemize/permissions.sh"
-    if [ -f "$perm_script" ]; then
-        . "$perm_script"
-        if type generate_permissions >/dev/null 2>&1; then
-            generate_permissions "$pkg" "$target_dir" || log_w "$_tag" "permissions XML failed for $pkg"
+    # 7: Priv-app permissions XML -- only needed for priv-app (Android 9+ requirement)
+    if [ "$target" = "priv-app" ]; then
+        local perm_script="${MODDIR}/systemize/permissions.sh"
+        if [ -f "$perm_script" ]; then
+            . "$perm_script"
+            if type generate_permissions >/dev/null 2>&1; then
+                generate_permissions "$pkg" "$target_dir" || log_w "$_tag" "permissions XML failed for $pkg"
+            fi
         fi
     fi
 
-    # 8: Force PMS to forget the /data/app copy — THE step Terminal Systemizer missed
-    # -k preserves app data; --user 0 targets primary user only
-    if ! pm uninstall -k --user 0 "$pkg" 2>/dev/null; then
-        log_w "$_tag" "pm uninstall -k failed for $pkg (will retry after reboot)"
-    fi
-
-    # 9: Record operation for WebUI and reversal
-    _record_promotion "$pkg" "$app_name" "$first_path" "$target_dir"
+    # 8: Record operation — pm uninstall deferred to post_boot after overlay is verified
+    _record_promotion "$pkg" "$display_name" "$first_path" "$target_dir" "$target"
 
     log_i "$_tag" "promoted: $pkg ($copied APKs) -> $target_dir"
     return 0
@@ -95,7 +115,7 @@ promote_app() {
 
 _record_promotion() {
     local _tag="promote"
-    local pkg="$1" app_name="$2" orig_path="$3" target_dir="$4"
+    local pkg="$1" app_name="$2" orig_path="$3" target_dir="$4" target="$5"
     local iso_date
     iso_date="$(date '+%Y-%m-%d' 2>/dev/null || echo 'unknown')"
 
@@ -104,18 +124,17 @@ _record_promotion() {
     local tmp="${SYSTEMIZE_LIST}.tmp.$$"
 
     if [ -f "$SYSTEMIZE_LIST" ]; then
-        # Remove existing entry first to prevent duplicates on re-promote
         _jq --arg pkg "$pkg" --arg name "$app_name" \
             --arg orig "$orig_path" --arg sys "$sys_path" \
-            --arg date "$iso_date" \
-            '[.[] | select(.package_name != $pkg)] + [{"app_name":$name,"package_name":$pkg,"original_path":$orig,"system_path":$sys,"promoted_date":$date}]' \
+            --arg date "$iso_date" --arg tgt "$target" \
+            '[.[] | select(.package_name != $pkg)] + [{"app_name":$name,"package_name":$pkg,"original_path":$orig,"system_path":$sys,"promoted_date":$date,"target":$tgt,"needs_uninstall":true}]' \
             "$SYSTEMIZE_LIST" > "$tmp" 2>/dev/null
     else
         mkdir -p "$SCALPEL_DATA" 2>/dev/null
         _jq -n --arg pkg "$pkg" --arg name "$app_name" \
             --arg orig "$orig_path" --arg sys "$sys_path" \
-            --arg date "$iso_date" \
-            '[{"app_name":$name,"package_name":$pkg,"original_path":$orig,"system_path":$sys,"promoted_date":$date}]' \
+            --arg date "$iso_date" --arg tgt "$target" \
+            '[{"app_name":$name,"package_name":$pkg,"original_path":$orig,"system_path":$sys,"promoted_date":$date,"target":$tgt,"needs_uninstall":true}]' \
             > "$tmp" 2>/dev/null
     fi
 
@@ -132,16 +151,23 @@ demote_app() {
     _ensure_logging
     [ ! -f "$SYSTEMIZE_LIST" ] && { log_e "$_tag" "no systemize list found"; return 1; }
 
-    local sys_path
-    sys_path="$(_jq -r --arg pkg "$pkg" \
-        '.[] | select(.package_name==$pkg) | .system_path' "$SYSTEMIZE_LIST" 2>/dev/null)"
+    local entry_json
+    entry_json="$(_jq -r --arg pkg "$pkg" \
+        '.[] | select(.package_name==$pkg)' "$SYSTEMIZE_LIST" 2>/dev/null)"
+    [ -z "$entry_json" ] && { log_e "$_tag" "not in systemize list: $pkg"; return 1; }
 
-    [ -z "$sys_path" ] && { log_e "$_tag" "not in systemize list: $pkg"; return 1; }
+    local sys_path target
+    sys_path="$(echo "$entry_json" | _jq -r '.system_path // ""' 2>/dev/null)"
+    target="$(echo "$entry_json" | _jq -r '.target // "priv-app"' 2>/dev/null)"
 
     local sys_dir
     sys_dir="$(dirname "$sys_path")"
     [ -d "$sys_dir" ] && rm -rf "$sys_dir"
-    rm -f "${MODDIR}/system/etc/permissions/privapp-permissions-${pkg}.xml" 2>/dev/null
+
+    # Only priv-app promotions have permissions XML
+    if [ "$target" = "priv-app" ]; then
+        rm -f "${MODDIR}/system/etc/permissions/privapp-permissions-${pkg}.xml" 2>/dev/null
+    fi
 
     local tmp="${SYSTEMIZE_LIST}.tmp.$$"
     _jq --arg pkg "$pkg" '[.[] | select(.package_name != $pkg)]' \

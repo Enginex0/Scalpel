@@ -19,7 +19,7 @@ _load_helpers() {
 }
 
 mode_probe() {
-    # Inline root manager detection -- detect.sh may not be sourced when loaded independently
+    local _tag="mode_magisk"
     local mgr=""
     if [ -n "$KSU" ]; then
         mgr="ksu"
@@ -28,19 +28,33 @@ mode_probe() {
     elif [ -d "/data/adb/magisk" ]; then
         mgr="magisk"
     else
+        log_d "$_tag" "probe: no root manager detected"
         return 1
     fi
 
     case "$mgr" in
-        magisk) return 0 ;;
+        magisk)
+            log_d "$_tag" "probe: Magisk magic mount available"
+            return 0
+            ;;
         ksu)
-            [ "$KSU_MAGIC_MOUNT" = "true" ] && return 0
-            # KSU 22098+ defaults to magic mount when env var is unset
-            [ -n "$KSU_VER_CODE" ] && [ "$KSU_VER_CODE" -ge 22098 ] 2>/dev/null && return 0
+            if [ "$KSU_MAGIC_MOUNT" = "true" ]; then
+                log_d "$_tag" "probe: KSU magic mount enabled"
+                return 0
+            fi
+            if [ -n "$KSU_VER_CODE" ] && [ "$KSU_VER_CODE" -ge 22098 ] 2>/dev/null; then
+                log_d "$_tag" "probe: KSU 22098+ defaults to magic mount"
+                return 0
+            fi
+            log_d "$_tag" "probe: KSU magic mount not enabled (KSU_MAGIC_MOUNT=$KSU_MAGIC_MOUNT, VER=$KSU_VER_CODE)"
             return 1
             ;;
         apatch)
-            [ "$APATCH_BIND_MOUNT" = "true" ] && return 0
+            if [ "$APATCH_BIND_MOUNT" = "true" ]; then
+                log_d "$_tag" "probe: APatch bind mount enabled"
+                return 0
+            fi
+            log_d "$_tag" "probe: APatch bind mount not enabled"
             return 1
             ;;
     esac

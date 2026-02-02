@@ -1,0 +1,256 @@
+import { createSignal, createMemo, For, Show } from 'solid-js';
+import { store } from '../lib/store';
+import { Card } from '../components/core/Card';
+import { Button } from '../components/core/Button';
+import { Badge } from '../components/core/Badge';
+import { AppIcon } from '../components/core/AppIcon';
+import { Modal } from '../components/layout/Modal';
+import { ICONS } from '../lib/icons';
+import { setupTextScroll } from '../lib/textScroll';
+
+export function SystemizeTab() {
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const [demoteConfirmPkg, setDemoteConfirmPkg] = createSignal<string | null>(null);
+
+  const selected = store.systemizeSelected;
+  const setSelected = store.setSystemizeSelected;
+
+  const promotedPkgs = createMemo(() => new Set(store.promotedApps().map(a => a.package_name)));
+
+  // Only user-installed apps (/data/app/) are eligible for promotion
+  const eligibleApps = createMemo(() =>
+    store.userApps().filter(a => !a.sourcePath || a.sourcePath.startsWith('/data/app/'))
+  );
+
+  const availableUserApps = createMemo(() => {
+    const q = searchQuery().toLowerCase();
+    return eligibleApps().filter(a => {
+      if (promotedPkgs().has(a.package_name)) return false;
+      if (q && !a.app_name.toLowerCase().includes(q) && !a.package_name.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  });
+
+  const availableCount = createMemo(() =>
+    eligibleApps().filter(a => !promotedPkgs().has(a.package_name)).length
+  );
+
+  const toggleSelect = (pkg: string) => {
+    const s = new Set<string>(selected());
+    if (s.has(pkg)) s.delete(pkg); else s.add(pkg);
+    setSelected(s);
+  };
+
+  const [openSections, setOpenSections] = createSignal<Set<string>>(new Set(['promoted', 'available']));
+  const toggleSection = (id: string) => {
+    const next = new Set(openSections());
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setOpenSections(next);
+  };
+
+  const handleDemote = async (pkg: string) => {
+    setDemoteConfirmPkg(null);
+    await store.demoteApp(pkg);
+  };
+
+  return (
+    <div style="padding:0 16px;padding-top:48px;">
+      {/* Description */}
+      <div style="background:rgba(var(--accent-rgb), 0.05);border:1px solid rgba(var(--accent-rgb), 0.1);padding:16px;border-radius:12px;margin-bottom:20px;">
+        <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:6px;">Promote to System</div>
+        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;">
+          Elevate user apps to system-level, surviving factory resets. Select apps below, then tap the promote button to choose installation level.
+        </div>
+      </div>
+
+      {/* Hero stats */}
+      <div style="display:flex;gap:16px;margin-bottom:20px;">
+        <div style="flex:1;text-align:center;">
+          <div style="font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:700;" class="gradient-text">
+            {store.promotedApps().length}
+          </div>
+          <div style="font-size:12px;color:var(--text-tertiary);font-weight:500;">PROMOTED</div>
+        </div>
+        <div style="width:1px;background:var(--glass-border);" />
+        <div style="flex:1;text-align:center;">
+          <div style="font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:700;color:var(--text-secondary);">
+            {availableCount()}
+          </div>
+          <div style="font-size:12px;color:var(--text-tertiary);font-weight:500;">AVAILABLE</div>
+        </div>
+      </div>
+
+      {/* Promoted apps */}
+      <Show when={store.promotedApps().length > 0}>
+        <div style="margin-bottom:20px;">
+          <button
+            onClick={() => toggleSection('promoted')}
+            style="width:100%;display:flex;align-items:center;gap:10px;padding:12px 0 8px;cursor:pointer;background:none;border:none;"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--text-tertiary)" style={`transform:rotate(${openSections().has('promoted') ? '0' : '-90'}deg);transition:transform 0.2s;flex-shrink:0;`}>
+              <path d={ICONS.chevronDown} />
+            </svg>
+            <span style="width:8px;height:8px;border-radius:50%;background:var(--color-success);flex-shrink:0;" />
+            <span style="font-size:13px;font-weight:600;letter-spacing:1px;color:var(--color-success);text-transform:uppercase;">
+              Promoted to System
+            </span>
+            <span style="font-size:12px;color:var(--text-tertiary);">({store.promotedApps().length})</span>
+          </button>
+          <Show when={openSections().has('promoted')}>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <For each={store.promotedApps()}>
+                {(app, i) => (
+                  <Card variant="glass" padding="small" style={`border-left:3px solid var(--color-success);animation:slideInRight 0.2s var(--ease-out) ${i() * 60}ms both;`}>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                      <AppIcon packageName={app.package_name} source="ksu" size={36} appName={app.app_name} />
+                      <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+                          <span style="font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                            <span ref={(el) => setupTextScroll(el)}>{app.app_name}</span>
+                          </span>
+                          <Badge variant="success" size="small">Promoted</Badge>
+                        </div>
+                        <div style="font-size:11px;color:var(--text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                          <span ref={(el) => setupTextScroll(el)}>{app.package_name}</span>
+                        </div>
+                        <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px;">
+                          Promoted: {app.promoted_date}
+                        </div>
+                      </div>
+                      <Button size="small" variant="ghost" style="color:var(--color-error);" onClick={() => setDemoteConfirmPkg(app.package_name)}>
+                        Demote
+                      </Button>
+                    </div>
+                  </Card>
+                )}
+              </For>
+            </div>
+          </Show>
+        </div>
+      </Show>
+
+      {/* Available user apps */}
+      <button
+        onClick={() => toggleSection('available')}
+        style="width:100%;display:flex;align-items:center;gap:10px;padding:12px 0 8px;cursor:pointer;background:none;border:none;"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--text-tertiary)" style={`transform:rotate(${openSections().has('available') ? '0' : '-90'}deg);transition:transform 0.2s;flex-shrink:0;`}>
+          <path d={ICONS.chevronDown} />
+        </svg>
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--text-accent);flex-shrink:0;" />
+        <span style="font-size:13px;font-weight:600;letter-spacing:1px;color:var(--text-tertiary);text-transform:uppercase;">
+          Available User Apps
+        </span>
+        <span style="font-size:12px;color:var(--text-tertiary);">({availableCount()})</span>
+      </button>
+
+      <Show when={openSections().has('available')}>
+        <div style="position:relative;margin-bottom:8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--text-tertiary)" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);">
+            <path d={ICONS.search} />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search user apps..."
+            aria-label="Search user apps"
+            value={searchQuery()}
+            onInput={(e) => setSearchQuery(e.currentTarget.value)}
+            style="width:100%;padding:10px 12px 10px 42px;background:var(--bg-surface);border:1px solid var(--glass-border);border-radius:100px;color:var(--text-primary);font-size:14px;"
+          />
+        </div>
+
+        <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:12px;padding-left:4px;">
+          Tap app to mark for promotion
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <For each={availableUserApps()}>
+            {(app, i) => {
+              const isSelected = () => selected().has(app.package_name);
+              return (
+                <div
+                  onClick={() => toggleSelect(app.package_name)}
+                  style={`
+                    display:flex;align-items:center;gap:12px;padding:12px;
+                    background:${isSelected() ? 'rgba(var(--accent-rgb), 0.08)' : 'var(--bg-surface)'};
+                    border:1px solid ${isSelected() ? 'rgba(var(--accent-rgb), 0.3)' : 'var(--glass-border)'};
+                    border-radius:12px;cursor:pointer;
+                    transition:all 0.2s var(--ease-spring);
+                    animation:slideInRight 0.2s var(--ease-out) ${Math.min(i(), 8) * 40}ms both;
+                  `}
+                >
+                  <AppIcon packageName={app.package_name} source="ksu" appName={app.app_name} />
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                      <span ref={(el) => setupTextScroll(el)}>{app.app_name}</span>
+                    </div>
+                    <div style="font-size:11px;color:var(--text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                      <span ref={(el) => setupTextScroll(el)}>{app.package_name}</span>
+                    </div>
+                  </div>
+                  <div style={`
+                    width:22px;height:22px;border-radius:50%;flex-shrink:0;
+                    border:2px solid ${isSelected() ? 'rgba(var(--accent-rgb), 0.8)' : 'rgba(255,255,255,0.15)'};
+                    background:${isSelected() ? 'rgba(var(--accent-rgb), 0.15)' : 'transparent'};
+                    display:flex;align-items:center;justify-content:center;
+                    transition:all 0.2s var(--ease-spring);
+                  `}>
+                    <Show when={isSelected()}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="var(--text-accent)">
+                        <path d={ICONS.check} />
+                      </svg>
+                    </Show>
+                  </div>
+                </div>
+              );
+            }}
+          </For>
+        </div>
+
+        <Show when={availableUserApps().length === 0}>
+          <div style="text-align:center;padding:40px 0;color:var(--text-tertiary);">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.3;margin-bottom:12px;">
+              <path d={ICONS.check} />
+            </svg>
+            <div style="font-size:14px;">No user apps available</div>
+          </div>
+        </Show>
+      </Show>
+
+      {/* Batch action bar */}
+      <Show when={selected().size > 0}>
+        <div style={`
+          position:fixed;bottom:calc(68px + env(safe-area-inset-bottom));left:16px;right:76px;
+          padding:12px 16px;border-radius:16px;
+          background:var(--bg-surface-elevated);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+          border:1px solid var(--glass-border);
+          display:flex;align-items:center;justify-content:space-between;
+          z-index:90;
+          animation:slideInUp 0.3s var(--ease-spring);
+        `}>
+          <span style="font-size:14px;font-weight:600;">{selected().size} selected</span>
+          <button
+            onClick={() => setSelected(new Set<string>())}
+            style="padding:4px 10px;border-radius:8px;font-size:12px;color:var(--text-tertiary);background:var(--bg-surface);border:1px solid var(--glass-border);"
+          >
+            Clear
+          </button>
+        </div>
+      </Show>
+
+      {/* Demote confirmation */}
+      <Modal open={!!demoteConfirmPkg()} onClose={() => setDemoteConfirmPkg(null)} title="Confirm Demotion">
+        <p style="text-align:center;color:var(--text-secondary);margin-bottom:8px;font-size:14px;">
+          Demote <strong>{store.promotedApps().find(a => a.package_name === demoteConfirmPkg())?.app_name || demoteConfirmPkg()}</strong> back to user app?
+        </p>
+        <p style="text-align:center;color:var(--text-tertiary);margin-bottom:16px;font-size:12px;">
+          A reboot is required.
+        </p>
+        <div style="display:flex;gap:12px;">
+          <Button variant="ghost" fullWidth onClick={() => setDemoteConfirmPkg(null)}>Cancel</Button>
+          <Button variant="danger" fullWidth onClick={() => handleDemote(demoteConfirmPkg()!)}>Demote</Button>
+        </div>
+      </Modal>
+    </div>
+  );
+}

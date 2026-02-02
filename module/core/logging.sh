@@ -26,7 +26,10 @@ log_init() {
     _SCALPEL_LOG_LEVEL_NUM=$(_log_level_to_num "${SCALPEL_LOG_LEVEL:-info}")
 
     if [ ! -d "$SCALPEL_LOG_DIR" ]; then
-        mkdir -p "$SCALPEL_LOG_DIR" 2>/dev/null || return 1
+        mkdir -p "$SCALPEL_LOG_DIR" 2>/dev/null || {
+            echo "scalpel[logging]: FATAL cannot create log dir $SCALPEL_LOG_DIR" > /dev/kmsg
+            return 1
+        }
     fi
 
     log_rotate

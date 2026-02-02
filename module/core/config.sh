@@ -12,6 +12,7 @@ _config_defaults() {
     SCALPEL_LOG_LEVEL="info"
     SCALPEL_REFRESH_APPLIST="false"
     SCALPEL_DISABLE_ONLY="false"
+    SCALPEL_UNINSTALL_FALLBACK="true"
     SCALPEL_MONITOR_INTERVAL="300"
 }
 
@@ -53,6 +54,7 @@ _config_write_file() {
         printf 'SCALPEL_LOG_LEVEL="%s"\n' "$SCALPEL_LOG_LEVEL"
         printf 'SCALPEL_REFRESH_APPLIST="%s"\n' "$SCALPEL_REFRESH_APPLIST"
         printf 'SCALPEL_DISABLE_ONLY="%s"\n' "$SCALPEL_DISABLE_ONLY"
+        printf 'SCALPEL_UNINSTALL_FALLBACK="%s"\n' "$SCALPEL_UNINSTALL_FALLBACK"
         printf 'SCALPEL_MONITOR_INTERVAL="%s"\n' "$SCALPEL_MONITOR_INTERVAL"
     } > "$tmp_file"
     if [ ! -s "$tmp_file" ]; then
@@ -75,6 +77,7 @@ _config_dispatch_get() {
         SCALPEL_LOG_LEVEL) echo "$SCALPEL_LOG_LEVEL" ;;
         SCALPEL_REFRESH_APPLIST) echo "$SCALPEL_REFRESH_APPLIST" ;;
         SCALPEL_DISABLE_ONLY) echo "$SCALPEL_DISABLE_ONLY" ;;
+        SCALPEL_UNINSTALL_FALLBACK) echo "$SCALPEL_UNINSTALL_FALLBACK" ;;
         SCALPEL_MONITOR_INTERVAL) echo "$SCALPEL_MONITOR_INTERVAL" ;;
         *) return 1 ;;
     esac
@@ -96,6 +99,9 @@ _config_dispatch_set() {
         SCALPEL_DISABLE_ONLY)
             case "$val" in true|false) ;; *) return 1 ;; esac
             SCALPEL_DISABLE_ONLY="$val" ;;
+        SCALPEL_UNINSTALL_FALLBACK)
+            case "$val" in true|false) ;; *) return 1 ;; esac
+            SCALPEL_UNINSTALL_FALLBACK="$val" ;;
         SCALPEL_MONITOR_INTERVAL)
             case "$val" in ''|*[!0-9]*) return 1 ;; esac
             SCALPEL_MONITOR_INTERVAL="$val" ;;

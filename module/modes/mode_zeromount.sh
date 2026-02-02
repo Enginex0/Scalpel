@@ -8,6 +8,20 @@ _ZM_TRACKING="/data/adb/zeromount/module_paths/scalpel"
 
 . "${MODDIR:-/data/adb/modules/scalpel}/core/whiteout_helpers.sh"
 
+# zm list format: <source_file>-><virtual_path>
+# ZeroMount WebUI scan extracts source_file and greps for /data/adb/modules/<name>
+# sync.sh uses /nonexistent as source for whiteouts, which has no module path — invisible to scan
+# Direct registration with module path as source fixes WebUI detection
+_zm_register_whiteout() {
+    local _moddir="$1" _app_path="$2" _zm_bin _vpath
+    _vpath="$(dirname "$_app_path")"
+    for _p in /data/adb/modules/zeromount/bin/zm /data/adb/modules/zeromount/zm-arm64 /data/adb/modules/zeromount/zm; do
+        [ -x "$_p" ] && { _zm_bin="$_p"; break; }
+    done
+    [ -z "$_zm_bin" ] && return 0
+    "$_zm_bin" add "$_vpath" "${_moddir}${_vpath}" </dev/null 2>/dev/null
+}
+
 mode_probe() {
     local _tag="mode_zeromount"
     if [ ! -d "/data/adb/modules/zeromount" ]; then
@@ -42,6 +56,7 @@ mode_debloat() {
     whiteout_fix_vendor_symlinks "$moddir"
 
     if sh "$_ZM_SYNC" scalpel >/dev/null 2>&1; then
+        _zm_register_whiteout "$moddir" "$app_path"
         log_i "$_tag" "hidden $pkg (via zeromount sync)"
         return 0
     fi

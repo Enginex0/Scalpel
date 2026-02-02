@@ -59,7 +59,8 @@ mode_cleanup()   → remove all state for this mode
 - **Purpose:** Detect module/app state changes, sync rules, update WebUI cache
 - **Inputs:** Module directory watches, app install events
 - **Outputs:** Status cache JSON for WebUI, rule sync operations
-- **Dependencies:** None (pure polling via sleep)
+- **Dependencies:** Sources logging.sh, config.sh, detect.sh
+- **Self-healing:** `monitor_supervised()` wrapper auto-restarts crashed monitor (60s cooldown, max 10 restarts, exit code 2 = singleton conflict)
 
 ### Config System: config.sh
 
@@ -91,6 +92,8 @@ mode_cleanup()   → remove all state for this mode
 | jq binary missing | Hard fail at install time | customize.sh aborts with error message |
 | ZeroMount disappears after boot | Detect at next boot, fall back to next mode | Seamless mode switch |
 | busybox missing | Hard fail at boot | Module logs error to kmsg, does nothing |
+
+**No-reboot debloat modes:** `zeromount`, `mountify`, `pm` — these modes take effect immediately without requiring reboot.
 
 ---
 

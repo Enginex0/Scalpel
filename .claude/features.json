@@ -101,15 +101,15 @@
     {
       "id": "mode-zeromount",
       "title": "Mode: ZeroMount VFS interception",
-      "description": "Detect /dev/zeromount, use zm CLI (zm add/del) to register whiteout paths. Top-tier detection resistance. Implements mode interface.",
+      "description": "Detect ZeroMount, create whiteouts in module dir, call sync.sh for delegation. Top-tier detection resistance via SUSFS. Implements mode interface.",
       "status": "done",
       "priority": "mvp",
       "size": "S",
       "tags": ["modes", "stealth"],
       "blocked_by": ["core-detect"],
       "started_date": "2026-01-31",
-      "completed_date": "2026-01-31",
-      "notes": "Cleanest mode — zero mount table entries"
+      "completed_date": "2026-02-01",
+      "notes": "Session 12 rewrite: zm add is for VFS REDIRECTION not hiding. Now uses whiteouts + sync.sh delegation. ZeroMount handles SUSFS internally. 16/16 device tests passed."
     },
     {
       "id": "mode-magisk",
@@ -245,66 +245,66 @@
       "id": "webui-scaffold",
       "title": "WebUI scaffold (fork ZeroMount webroot-beta)",
       "description": "Fork ZeroMount's webroot-beta/ as starting point. Reuse bridge.ts, theme system, component library, Vite config, icon loading. Strip ZeroMount-specific tabs. Add tab navigation: Debloat, Systemize, Status, Settings. Add floating reboot FAB button with confirmation dialog.",
-      "status": "pending",
+      "status": "done",
       "priority": "mvp",
       "size": "M",
       "tags": ["webui"],
       "blocked_by": [],
-      "started_date": null,
-      "completed_date": null,
-      "notes": "Fork, don't rebuild. Reuse ZeroMount's proven components. FAB reboot button included."
+      "started_date": "2026-02-01",
+      "completed_date": "2026-02-01",
+      "notes": "Neon Scalpel design. Scalpel Signature System (blade mark, incision line, glint animation). 8 surgical accent presets."
     },
     {
       "id": "webui-debloat",
       "title": "WebUI debloat tab",
       "description": "App list with lazy loading, category badges (essential/caution/safe/google/unknown), fuzzy search, multi-select, confirmation dialog with risk warnings, nuke button.",
-      "status": "pending",
+      "status": "done",
       "priority": "mvp",
       "size": "L",
       "tags": ["webui"],
       "blocked_by": ["webui-scaffold", "core-scanner"],
-      "started_date": null,
-      "completed_date": null,
-      "notes": ""
+      "started_date": "2026-02-01",
+      "completed_date": "2026-02-01",
+      "notes": "Lazy loading, category badges, fuzzy search, multi-select, risk-bleeding animations, nuke confirmation."
     },
     {
       "id": "webui-systemize",
       "title": "WebUI systemize tab",
       "description": "List user-installed apps, select target (app/priv-app), promote button, status verification after reboot.",
-      "status": "pending",
+      "status": "done",
       "priority": "mvp",
       "size": "M",
       "tags": ["webui"],
       "blocked_by": ["webui-scaffold", "systemize-promote"],
-      "started_date": null,
-      "completed_date": null,
-      "notes": ""
+      "started_date": "2026-02-01",
+      "completed_date": "2026-02-01",
+      "notes": "User app list, target selection (app/priv-app), promote button, incision clip-path reveal animation."
     },
     {
       "id": "webui-status",
       "title": "WebUI status tab",
       "description": "Active mode display, debloated app count, systemized app count, bootloop counter, module health, last operation log.",
-      "status": "pending",
+      "status": "done",
       "priority": "mvp",
       "size": "M",
       "tags": ["webui"],
       "blocked_by": ["webui-scaffold"],
-      "started_date": null,
-      "completed_date": null,
-      "notes": ""
+      "started_date": "2026-02-01",
+      "completed_date": "2026-02-01",
+      "notes": "Mode display, counts, verification 4-quadrant grid, CRT scanlines effect, monitor stats from B."
     },
     {
       "id": "webui-settings",
       "title": "WebUI settings tab",
       "description": "Mode override, theme selection, accent colors, logging toggle, clear all operations, export/import config.",
-      "status": "pending",
+      "status": "done",
       "priority": "phase2",
       "size": "M",
       "tags": ["webui"],
       "blocked_by": ["webui-scaffold"],
-      "started_date": null,
-      "completed_date": null,
-      "notes": ""
+      "started_date": "2026-02-01",
+      "completed_date": "2026-02-01",
+      "notes": "Auto theme mode, 8 surgical accents (Steel, Arterial, Cautery, etc.), mode override, export/import."
     },
     {
       "id": "categories-db",
@@ -317,7 +317,7 @@
       "blocked_by": [],
       "started_date": "2026-01-31",
       "completed_date": "2026-01-31",
-      "notes": "692 apps classified across 5 risk tiers, 8 OEMs. Validated by Prof. Rigor (5 misclassifications fixed)."
+      "notes": "248 apps classified across 5 risk tiers, 8 OEMs. Validated by Prof. Rigor (5 misclassifications fixed)."
     },
     {
       "id": "uninstall-cleanup",

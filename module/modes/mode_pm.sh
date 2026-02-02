@@ -5,7 +5,13 @@
 SCALPEL_NUKE_LIST="${SCALPEL_DATA:-/data/adb/scalpel}/nuke_list.json"
 
 mode_probe() {
-    command -v pm >/dev/null 2>&1
+    local _tag="mode_pm"
+    if ! command -v pm >/dev/null 2>&1; then
+        log_d "$_tag" "probe: pm command not found"
+        return 1
+    fi
+    log_d "$_tag" "probe: pm available"
+    return 0
 }
 
 mode_debloat() {

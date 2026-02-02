@@ -41,6 +41,12 @@ Yes, as top-tier optional mode. Scalpel detects ZeroMount presence (/dev/zeromou
 - We lose: Nothing — graceful fallback means no compatibility cost
 - We must now: Implement ZeroMount detection and `zm add`/`zm del` integration in mode_zeromount.sh
 
+**Update (Session 12) — SUPERSEDED:**
+Original CLI approach (`zm add/del`) discovered to be incorrect. ZeroMount handles VFS redirection (replace file A with file B), not path hiding. `zm add /path ""` creates broken redirect, path still visible. Correct integration:
+1. Scalpel creates whiteout files (char device c 0 0) in module directory
+2. Calls ZeroMount sync.sh for delegation
+3. ZeroMount internally uses SUSFS for path hiding
+
 ---
 
 ### Decision 3: All Six Mounting Modes
@@ -97,7 +103,7 @@ Magisk + KernelSU + APatch. Detection via environment variables ($KSU, $APATCH) 
 **Status:** Accepted
 
 **Decision:**
-Solid.js + TypeScript + Vite, reusing ZeroMount's proven patterns. No terminal TUI. KSU bridge API via `ksu.exec()`.
+Solid.js + TypeScript + Vite, reusing ZeroMount's proven patterns. No terminal TUI. KSU bridge via `globalThis.ksu` with callback pattern (not ES module import).
 
 **Rationale:** User already knows Solid.js from ZeroMount. Type safety prevents the kind of bugs found in SAN's 1114-line util.js. Reactive signals provide clean state management.
 
@@ -214,7 +220,7 @@ Fixed-position Floating Action Button at bottom-right of WebUI (above tab bar). 
 Users often want a standard debloat applied immediately. Volume key selection during customize.sh provides a quick opt-in during installation.
 
 **Decision:**
-During customize.sh: display curated default nuke list (package names), prompt with volume keys. Vol UP = apply debloat list, Vol DOWN = skip. 7-second timeout = SKIP (safe default). If applied, write nuke_list.json. Post-fs-data.sh processes it on first reboot. Package names provided by user later — this is the last backend task before WebUI.
+During customize.sh: display curated default nuke list (package names), prompt with volume keys. Vol UP = apply debloat list, Vol DOWN = skip. 8-second timeout = SKIP (safe default). If applied, write nuke_list.json. Post-fs-data.sh processes it on first reboot. Package names provided by user later — this is the last backend task before WebUI.
 
 Volume key detection pattern: `getevent -qlc 1 | grep KEY_ | awk '{print $3}'` (from Simple-Flag-Secure reference).
 

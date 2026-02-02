@@ -13,7 +13,13 @@ _SYM_VENDOR_PARTS="mi_ext my_bigball my_carrier my_company my_engineering \
 my_heytap my_manifest my_preload my_product my_region my_reserve my_stock"
 
 mode_probe() {
-    grep -qF "overlay" /proc/filesystems 2>/dev/null
+    local _tag="symlink"
+    if ! grep -qF "overlay" /proc/filesystems 2>/dev/null; then
+        log_d "$_tag" "probe: overlayfs not in /proc/filesystems"
+        return 1
+    fi
+    log_d "$_tag" "probe: overlayfs available"
+    return 0
 }
 
 # Overlayfs needs the opaque xattr to suppress lower layer contents

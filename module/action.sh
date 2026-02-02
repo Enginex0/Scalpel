@@ -1,9 +1,12 @@
 #!/system/bin/sh
 # Entry point when user taps module in root manager app
 MODDIR="${0%/*}"
-TAG="action"
 
 SCALPEL_DATA="/data/adb/scalpel"
+
+. "${MODDIR}/core/logging.sh"
+log_init 2>/dev/null
+_tag="action"
 STATUS_FILE="${SCALPEL_DATA}/status.json"
 SYSTEMIZE_LIST="${SCALPEL_DATA}/systemize_list.json"
 
@@ -62,7 +65,13 @@ _print_status() {
 _update_description() {
     [ -z "$KSU" ] && [ -z "$APATCH" ] && return
 
-    if [ ! -f "$STATUS_FILE" ] || ! _jq '.' "$STATUS_FILE" >/dev/null 2>&1; then
+    if [ ! -f "$STATUS_FILE" ]; then
+        log_d "$_tag" "update_description: no status file yet"
+        return
+    fi
+
+    if ! _jq '.' "$STATUS_FILE" >/dev/null 2>&1; then
+        log_w "$_tag" "update_description: status file corrupted"
         return
     fi
 
@@ -73,29 +82,37 @@ _update_description() {
 
     local desc="${debloated} debloated, ${systemized} systemized [${mode}]"
 
-    # KSU has ksud config for runtime description override
     if [ "$KSU" = "true" ] && command -v ksud >/dev/null 2>&1; then
         ksud module config set override.description "$desc" 2>/dev/null
+        log_d "$_tag" "updated description: $desc"
     fi
 }
 
 _launch_webui_magisk() {
-    # Magisk has no native WebUI -- launch standalone viewer app
     if pm path io.github.a13e300.ksuwebui >/dev/null 2>&1; then
         echo "  Launching WebUI in KSUWebUIStandalone..."
-        am start -n "io.github.a13e300.ksuwebui/.WebUIActivity" -e id "scalpel" >/dev/null 2>&1
-        return 0
+        if am start -n "io.github.a13e300.ksuwebui/.WebUIActivity" -e id "scalpel" >/dev/null 2>&1; then
+            log_i "$_tag" "launched WebUI via KSUWebUIStandalone"
+            return 0
+        fi
+        log_e "$_tag" "failed to launch KSUWebUIStandalone"
+        return 1
     fi
 
     if pm path com.dergoogler.mmrl.wx >/dev/null 2>&1; then
         echo "  Launching WebUI in WebUI X..."
-        am start -n "com.dergoogler.mmrl.wx/.ui.activity.webui.WebUIActivity" -e MOD_ID "scalpel" >/dev/null 2>&1
-        return 0
+        if am start -n "com.dergoogler.mmrl.wx/.ui.activity.webui.WebUIActivity" -e MOD_ID "scalpel" >/dev/null 2>&1; then
+            log_i "$_tag" "launched WebUI via WebUI X"
+            return 0
+        fi
+        log_e "$_tag" "failed to launch WebUI X"
+        return 1
     fi
 
     echo "  No WebUI viewer installed."
     echo "  Install KSUWebUIStandalone or WebUI X to access the full interface."
     echo "  https://github.com/5ec1cff/KsuWebUIStandalone/releases"
+    log_w "$_tag" "no WebUI viewer available for Magisk"
     return 1
 }
 
@@ -111,6 +128,7 @@ _show_log_tail() {
 }
 
 # --- Main ---
+log_d "$_tag" "action.sh invoked"
 
 _print_status
 _update_description

@@ -1,182 +1,182 @@
-# Scalpel -- Project Context
+# Scalpel Context — Session 15 Complete
 
-> **Purpose:** Session handoff document. Read this first to understand where we are.
-> **Last updated:** 2026-02-01 (end of Session 3, after polish round)
-> **Polish Round:** All 36 MEDIUM/LOW/TAG findings resolved. Backend validated at 100/100 score. Ship-ready.
+## Quick Status
+- **Phase:** Ship (VALIDATED)
+- **Features:** 26/26 (100%)
+- **Module Version:** v0.1.0
+- **Device Tests:** 16/16 PASSED (Session 12) + UI verified via Playwright (Sessions 13-14) + device verified (Session 15)
+- **Device:** Xiaomi Redmi 14C, KernelSU Next, 162 system apps, ZeroMount mode active
+- **Backend:** 100/100 validation score
+- **ZeroMount Integration:** FIXED — auto-detection + WebUI visibility working
 
----
+## Session 15 Summary (Latest)
 
-## Current State
+### 1. SystemizeTab — Tap-to-Select Restored + Selection Indicators
+- **Problem:** Session 14 reverted SystemizeTab to per-row Promote buttons, killing the tap-to-select pattern
+- **Fix:** Full rewrite of SystemizeTab.tsx:
+  - Removed per-row Promote buttons and individual promote modal (moved to FAB)
+  - Added `toggleSelect()` using existing `store.systemizeSelected` / `store.setSystemizeSelected` signals
+  - Selection circle indicator (22px): hollow when unselected, accent-filled with checkmark when selected
+  - Visual selected state: accent background + accent border
+  - Instruction hint: "Tap app to mark for promotion" below search bar
+  - Batch action bar at bottom (same pattern as DebloatTab)
+  - Promoted apps section unchanged (per-row Demote buttons remain)
 
-**Features:** 21/26 done (81%)
-**Backend:** 100% complete. All 6 modes, all boot scripts, scanner, installer, uninstaller, monitor, action.sh.
-**Validation:** Phase C comprehensive audit passed. 3 CRITICAL + 3 HIGH bugs found and fixed.
-**Frontend:** Not started. 5 WebUI features remaining (scaffold, debloat, systemize, status, settings).
-**Next:** Phase D -- WebUI Frontend (fork ZeroMount webroot-beta).
+### 2. SystemizeFAB — Glass Morphism Redesign with Batch Promote
+- **Idle state (0 selected):** Frosted glass background, thin white border, dimmed accent icon, 0.7 opacity, gentle float animation
+- **Active state (N selected):** Accent-tinted glass, outer glow, full opacity, glowPulse animation, accent count badge (20px circle)
+- Changed icon from `ICONS.arrowUp` to `ICONS.promote` (star/bookmark)
+- Click opens batch promote modal: target selector (Privileged vs System), scrollable app list, warning, Cancel/"Promote N" buttons
+- **Visual identity of 3 FABs now distinct:**
+  - RebootFAB: Solid accent gradient (always vibrant)
+  - NukeFAB: Solid red gradient when active, elevated surface when inactive
+  - SystemizeFAB: Frosted glass morphism (unique)
 
----
+### 3. DebloatTab — "Safe to Remove" Expanded by Default
+- Changed initial `openSections` from `new Set()` to `new Set(['safe'])`
+- Users no longer need to manually expand to see the most useful section
 
-## Session 3 Summary (2026-02-01)
+### 4. ZeroMount "Not Loaded" Bug Fix (CRITICAL)
+- **Problem:** ZeroMount WebUI showed Scalpel as "Not Loaded", "0 files", "Inactive" despite debloat working (4 apps hidden)
+- **Root cause discovery:**
+  - ZeroMount WebUI SCAN: `zm list | awk -F'->' '{print $1}' | grep -oE '/data/adb/modules/[^/]+'`
+  - `zm add <arg1> <arg2>` → `zm list` shows `<arg2>-><arg1>` (REVERSED order)
+  - sync.sh whiteout rules: `zm add <vpath> /nonexistent` → LEFT side = `/nonexistent` → no module match
+- **Fix:** Added `_zm_register_whiteout()` in mode_zeromount.sh:
+  - After sync.sh, also calls `zm add <vpath> <module_chardev_path>` directly
+  - Module char device path on LEFT side → WebUI detects "Loaded"
+- **Verified on device:** `zm list` shows all rules with module paths, WebUI shows "Loaded", "Active"
 
-### What was done
+### Key Discovery — zm Binary Format
+- `zm add <arg1> <arg2>` → `zm list` shows `<arg2>-><arg1>` (arg2 on LEFT, arg1 on RIGHT)
+- arg1 = virtual target path (what to intercept)
+- arg2 = source file path (what to serve instead)
+- `zm del <virtual_path>` removes rule by target (arg1)
+- For whiteouts: use module char device path as arg2 (not /nonexistent) for WebUI detection
 
-1. **Documentation-first approach:** Fetched KernelSU/APatch/Android shell documentation (5 reference docs, ~5,300 lines total). Used these to validate existing code and inform new features.
+## Session 14 Summary
 
-2. **Phase A.1 -- Validation Fix Round:** Fixed 5 bugs identified in Wave 1 audit of existing code from Sessions 1-2.
+### Debloat Tab UX Overhaul
+- Collapsible accordion with chevron toggles, all sections collapsed by default
+- Tap-to-select (no checkboxes), instruction text below search bar
+- Section order: All System Apps (flat) → Safe to Remove → Essential → Caution → Google Services
+- No "Unknown" section (matching SAN exactly — util.js:857 skips unknown filter)
+- Unknown apps appear only in "All System Apps" with neutral border
+- Accent-ring circle detail button (28px, info 'i' icon)
 
-3. **Phase B -- Backend Completion:** Built 4 remaining backend files:
-   - `mode_mountify.sh` -- tmpfs+overlayfs standalone mount per partition
-   - `mode_symlink.sh` -- empty opaque directory technique for overlayfs-native managers
-   - `monitor.sh` -- inotifywait/logcat/poll fallback chain, 5s polling interval
-   - `action.sh` -- KSUWebUIStandalone/MMRL detection + download + launch
+### SystemizeTab Fancy Promotion Dialog
+- Fancy target selector: Privileged (shield icon, accent glow) vs System (phone icon, dimmed)
+- "Choose installation level" header with descriptive text
 
-4. **Phase B5 -- KSU Feature Integration:** Leveraged KernelSU-specific APIs:
-   - `boot-completed.sh` -- native KSU/APatch boot-completed hook (eliminates getprop polling)
-   - `post_boot.sh` -- shared post-boot helper (used by both service.sh and boot-completed.sh)
-   - `REMOVE variable` -- install-time whiteout via KSU/APatch (instant debloat before first boot)
-   - `override.description` -- KSU API for dynamic module description (cleaner than sed on module.prop)
+### Scanner Fallback Path Fix
+- Fixed `scanner.sh:11` from `$MODDIR/webroot/categories.json` to `$MODDIR/data/categories.json`
 
-5. **Phase C -- Comprehensive Backend Validation:** 2 auditors, 7 fix rounds. All CRITICAL/HIGH resolved:
-   - **C-01:** pm at post-fs-data -- changed PMS readiness check from pidof to `pm path android`
-   - **C-02:** scanner retry logic -- fixed retry mechanism for scanner failures
-   - **C-03:** setprop deadlock -- replaced setprop with file-based flags at post-fs-data on KSU
-   - **C-01b:** jq deletion -- customize.sh cleanup no longer removes bundled binaries
-   - **C-02b:** config override clobbering -- save/restore overrides around config_init()
-   - **C-03b:** negative BOOTCOUNT -- clamp to >= 0, preserve -1 recovery marker
-   - **H-01:** nuke timeout guard -- timing guard for KSU's ~10s post-fs-data limit
-   - **H-04:** setfattr non-fatal -- whiteout creation succeeds even without setfattr
+## Session 13 Summary
 
-### New files created
+### App Icon Pipeline + WebUI Overhaul
+- Icon extraction via aapt+unzip, dual-strategy AppIcon component (file/ksu)
+- KSU WebView can't follow symlinks across SELinux contexts → use native `getPackagesIcons()` API
+- 7 UI changes: ksu icons, no badges, text scroll, conditional header, context-sensitive FAB, vertical sections
+- Adversarial audit: 1 CRITICAL + 3 HIGH + 5 MEDIUM backend, 1 HIGH + 3 MEDIUM frontend — all fixed
 
-| File | Purpose |
-|------|---------|
-| `module/mode_mountify.sh` | Mode: standalone tmpfs+overlayfs per partition |
-| `module/mode_symlink.sh` | Mode: symlink + overlayfs with opaque directories |
-| `module/monitor.sh` | Background monitor daemon with fallback chain |
-| `module/action.sh` | Magisk WebUI launcher (KSUWebUIStandalone/MMRL) |
-| `module/boot-completed.sh` | KSU/APatch native boot-completed hook |
-| `module/post_boot.sh` | Shared post-boot helper (verify, monitor, description) |
-| `docs/reference/kernelsu-module-config.md` | KSU module configuration reference |
-| `docs/reference/kernelsu-module-webui.md` | KSU WebUI API reference |
-| `docs/reference/kernelsu-module-guide.md` | KSU module development guide |
-| `docs/reference/kernelsu-additional-docs.md` | KSU additional docs (boot stages, etc.) |
-| `docs/reference/android-shell-reference.md` | Android shell command reference |
-| `docs/reference/INDEX.md` | Reference document index |
-| `docs/COMPLIANCE.md` | KSU/APatch compliance checklist |
-| `docs/validation/AUDIT-BACKEND-VS-DOCS.md` | Backend vs documentation audit |
-| `docs/validation/VALIDATION-WAVE1-REX.md` | Wave 1 Red Team Rex report |
-| `docs/validation/VALIDATION-WAVE1-RIGOR.md` | Wave 1 Prof. Rigor report |
-| `docs/validation/VALIDATION-WAVE3-REX.md` | Wave 3 Red Team Rex report |
-| `docs/validation/VALIDATION-WAVE3-RIGOR.md` | Wave 3 Prof. Rigor report |
-| `docs/validation/PHASE-C-AUDIT-COMPREHENSIVE.md` | Phase C comprehensive audit |
-| `docs/validation/PHASE-C-CROSS-MANAGER-E2E.md` | Phase C cross-manager E2E test plan |
+## Session 12 Summary
 
-### Files modified
+### ZeroMount Integration + Logging + Device Testing
+- ZeroMount = VFS redirection, SUSFS = hiding. Use whiteouts + sync.sh delegation.
+- Unified logging (frontend → backend debug.log via ksuExec)
+- Monitor self-healing supervisor (auto-restart, max 10 retries)
+- 16/16 device tests passed
 
-| File | Changes |
-|------|---------|
-| `module/detect.sh` | Added mountify + symlink probe functions |
-| `module/nuke.sh` | Timing guard, nuke.lock lifecycle, mountify/symlink dispatch |
-| `module/service.sh` | Config override save/restore, post_boot.sh integration |
-| `module/post-fs-data.sh` | File-based signaling (no setprop), timing guard |
-| `module/customize.sh` | REMOVE variable for KSU, cleanup preserves bin/, scanner fixes |
-| `module/bootloop.sh` | Negative BOOTCOUNT clamping, sysrq-trigger fallback reboot |
-| `module/whiteout_helpers.sh` | setfattr non-fatal, improved error handling |
-| `module/scanner.sh` | Retry logic fix |
-| `module/uninstall.sh` | Cleanup improvements |
-| `module/config.sh` | Regex hardening, config_init override preservation |
-| `module/module.prop` | Updated for KSU override.description support |
-| `docs/DESIGN.md` | Updated with new modes and KSU features |
-| `docs/ARCHITECTURE.md` | Updated boot sequence with KSU-specific paths |
+## Files Modified (Session 15)
 
-### Key architectural changes
+### Frontend (webui-proposals/proposal-a/src/)
+- `routes/SystemizeTab.tsx` — Full rewrite (tap-to-select + selection indicators + batch action bar)
+- `components/scalpel/ContextFAB.tsx` — SystemizeFAB glass morphism + batch promote modal
+- `routes/DebloatTab.tsx` — Safe to Remove expanded by default (1 line change)
 
-1. **boot-completed.sh + post_boot.sh:** KSU/APatch get a native boot-completed hook. Both service.sh (Magisk path) and boot-completed.sh (KSU path) call the shared post_boot.sh helper, avoiding code duplication.
+### Backend (module/)
+- `modes/mode_zeromount.sh` — Added `_zm_register_whiteout()` helper for ZeroMount WebUI detection
 
-2. **REMOVE variable:** On KSU/APatch, default debloat packages are written to the REMOVE variable during customize.sh. This creates whiteouts at install time -- apps are hidden before the first boot, no post-fs-data processing needed.
+### Build Output (module/webroot/)
+- `index.html`, `assets/index-BLS6edH9.js`, `assets/index-DtaI-oLg.css`
 
-3. **override.description:** On KSU, the module description is updated via override.description file instead of sed on module.prop. Falls back to sed for Magisk.
+## Module Structure
+```
+module/
+├── META-INF/           <- Magisk flasher
+├── bin/arm64-v8a/      <- jq, aapt
+├── bin/armeabi-v7a/    <- jq, aapt
+├── core/               <- 11 scripts (config, logging, bootloop, detect, scanner, monitor, post_boot, etc.)
+├── modes/              <- 6 mode scripts (pm, whiteout, zeromount, magisk, mountify, symlink)
+├── systemize/          <- promote.sh, permissions.sh
+├── data/               <- categories.json
+├── webroot/            <- Built WebUI (Solid.js + TS)
+├── module.prop
+├── customize.sh
+├── service.sh
+├── post-fs-data.sh
+├── boot-completed.sh
+├── action.sh
+└── uninstall.sh
+```
 
-4. **File-based signaling:** Replaced setprop at post-fs-data with touch-file flags to avoid deadlocks on KSU.
+## WebUI Structure (webui-proposals/proposal-a/src/)
+```
+src/
+├── lib/                <- types.ts, api.ts, api.mock.ts, store.ts, theme.ts, icons.ts, constants.ts, ksuApi.ts, logger.ts, textScroll.ts, ksu.d.ts
+├── components/
+│   ├── core/           <- Badge, Button, Card, Input, Skeleton, Toggle, AppIcon (+CSS files)
+│   ├── layout/         <- Header, NavBar, Modal, Toast (+CSS files)
+│   └── scalpel/        <- ContextFAB, AppDetailSheet
+├── routes/             <- DebloatTab, SystemizeTab, StatusTab, SettingsTab
+├── App.tsx
+├── app.css
+└── index.tsx
+```
 
-5. **Timing guard:** nuke.sh monitors elapsed time and defers remaining operations to service.sh if approaching KSU's ~10s post-fs-data timeout.
+## Device Testing Status (Cumulative)
+| Test | Status | Session |
+|------|--------|---------|
+| Installation via `ksud module install` | PASS | 5 |
+| Config initialization | PASS | 12 |
+| App scan (162 apps) | PASS | 12 |
+| Mode detection (zeromount) | PASS | 12 |
+| Debloat operation (whiteout created) | PASS | 12 |
+| Path hiding verified (app invisible) | PASS | 12 |
+| Verify operation (1 verified, 0 broken) | PASS | 12 |
+| Restore operation (whiteout removed) | PASS | 12 |
+| Path restore verified (app visible again) | PASS | 12 |
+| Unified logging (frontend → backend) | PASS | 12 |
+| Monitor daemon running | PASS | 12 |
+| WebUI loads correctly | PASS | 12 |
+| Debloat tab functional | PASS | 12 |
+| Status tab shows correct mode | PASS | 12 |
+| Settings persist across reload | PASS | 12 |
+| Reboot FAB works | PASS | 12 |
+| App icons via KSU native API | PASS | 13 |
+| ZeroMount WebUI shows Scalpel as "Loaded" | PASS | 15 |
+| 4 apps nuked (FM Radio, YouTube, etc.) | PASS | 15 |
+| 2 apps promoted (AppListDetector, Checker) | PASS | 15 |
 
----
+## Key Learnings (Session 15)
+1. `zm add <arg1> <arg2>` → `zm list` shows `<arg2>-><arg1>` (reversed order)
+2. arg1 = virtual target path, arg2 = source file path
+3. `zm del <virtual_path>` removes by target (arg1)
+4. For whiteouts: use module char device path as arg2 (not /nonexistent) for WebUI detection
+5. ZeroMount WebUI extracts LEFT side of `zm list` → module path must be on LEFT (= arg2 position)
 
-## What's Next: Phase D -- WebUI Frontend
+## Key Architecture Decisions (Accumulated)
+- **ZeroMount integration (updated Session 15):** Scalpel creates whiteouts + calls sync.sh for SUSFS delegation, THEN registers whiteout with `zm add <vpath> <module_chardev_path>` for WebUI visibility
+- **App icons:** KSU native `getPackagesIcons()` API primary, file-based symlink fallback (SELinux blocks WebView symlink traversal)
+- **WebUI layout:** Header only on Status/Settings. Vertical category sections. No PRIV/category badges. Text scroll on overflow. Context-sensitive FABs (Reboot/Nuke/Systemize). Glass morphism SystemizeFAB.
+- **Debloat UX:** Collapsible accordion, "Safe to Remove" expanded by default, tap-to-select, SAN-matching unknown handling
+- **Systemize UX:** Tap-to-select with selection indicators, batch promote via glass FAB, fancy target selector (Privileged vs System)
 
-### Before Starting
-Read these reference docs first to understand KSU WebUI API and ZeroMount patterns:
-- `docs/reference/kernelsu-module-webui.md` -- KSU WebUI JavaScript API (exec, toast, fullScreen)
-- `/home/claudetest/zero-mount/nomount/webui-v2-beta/` -- ZeroMount reference implementation (fork this)
-
-### Approach
-Fork ZeroMount's webroot-beta (`/home/claudetest/zero-mount/nomount/webui-v2-beta/`) as the starting point. Reuse:
-- bridge.ts (shell command execution bridge)
-- Theme system (dark/light + accent colors)
-- Component library (cards, dialogs, buttons, icons)
-- Vite + Solid.js + TypeScript build config
-- Icon loading system
-
-### Features to build (5 remaining)
-1. **webui-scaffold** -- Fork, strip ZeroMount tabs, add Scalpel tabs (Debloat, Systemize, Status, Settings), floating reboot FAB
-2. **webui-debloat** -- App list with lazy loading, category badges, fuzzy search, multi-select, confirmation + risk warnings, nuke button
-3. **webui-systemize** -- User app list, target selection (app/priv-app), promote button, post-reboot verification
-4. **webui-status** -- Active mode, debloated/systemized counts, bootloop counter, module health, last operation log
-5. **webui-settings** -- Mode override, theme, accent colors, logging toggle, clear all, export/import config
-
-### Reference doc index
-
-| Document | Path | What it covers |
-|----------|------|----------------|
-| KSU Module Config | `docs/reference/kernelsu-module-config.md` | module.prop fields, REMOVE, REPLACE, skip_mount, webroot |
-| KSU WebUI API | `docs/reference/kernelsu-module-webui.md` | exec(), toast(), fullScreen() JS APIs for KSU WebUI |
-| KSU Module Guide | `docs/reference/kernelsu-module-guide.md` | Module structure, lifecycle, customize.sh, boot scripts |
-| KSU Additional | `docs/reference/kernelsu-additional-docs.md` | Boot stages, SELinux, overlay details |
-| Android Shell | `docs/reference/android-shell-reference.md` | toybox/toolbox commands, pm, am, getprop, mount |
-| Reference Index | `docs/reference/INDEX.md` | Master index of all reference documents |
-| Compliance | `docs/COMPLIANCE.md` | KSU/APatch API compliance checklist |
-
----
-
-## File inventory (all module scripts)
-
-### Core (Phase 1-2)
-- `module/config.sh` -- Config system with migration and safe sourcing
-- `module/logging.sh` -- 5-level logging with rotation and kmsg mirror
-- `module/bootloop.sh` -- 3-strike bootloop protection with counter clamping
-- `module/detect.sh` -- 6-mode probe chain with config override
-
-### Modes (Phase 3-4, B)
-- `module/mode_pm.sh` -- pm disable/enable fallback (universal)
-- `module/mode_whiteout.sh` -- overlayfs whiteout creation (primary)
-- `module/mode_zeromount.sh` -- ZeroMount VFS interception (stealth)
-- `module/mode_magisk.sh` -- Magisk magic mount (for systemizer)
-- `module/mode_mountify.sh` -- tmpfs+overlayfs standalone mount
-- `module/mode_symlink.sh` -- symlink + opaque directory overlay
-- `module/whiteout_helpers.sh` -- Shared whiteout creation utilities
-
-### Orchestrators (Phase 5, 7)
-- `module/nuke.sh` -- Debloat orchestrator (dispatches to active mode)
-- `module/verify.sh` -- Post-debloat verification
-- `module/post-fs-data.sh` -- Early boot entry point
-- `module/service.sh` -- Late boot orchestration (Magisk path)
-- `module/boot-completed.sh` -- Boot-completed hook (KSU/APatch path)
-- `module/post_boot.sh` -- Shared post-boot helper
-
-### Systemizer (Phase 6)
-- `module/promote.sh` -- 9-step clinical systemization engine
-- `module/permissions.sh` -- Priv-app permissions XML generator
-
-### Scanner + Installer (Phase 7)
-- `module/scanner.sh` -- System app scanner (runs at install)
-- `module/customize.sh` -- Installation logic + config migration + REMOVE
-- `module/default_debloat.sh` -- Volume key default debloat prompt
-- `module/uninstall.sh` -- Cleanup and restoration
-
-### Infrastructure (Phase B)
-- `module/monitor.sh` -- Background monitor daemon
-- `module/action.sh` -- Magisk WebUI launcher
-
-### Data files
-- `module/categories.json` -- 692 apps classified across 5 risk tiers, 8 OEMs
+## Next Session Tasks
+1. Test tap-to-select + batch promote flow end-to-end on device (select apps → tap glass FAB → choose target → promote)
+2. Test restore flow: does `zm del` properly clean up both `/nonexistent` and module-path rules?
+3. Reboot device and verify: (a) whiteouts persist, (b) ZeroMount metamount.sh processes at boot, (c) WebUI correct state
+4. Consider expanding categories.json with Xiaomi/MediaTek package classifications (57% unknown)
+5. End-to-end systemize test (promote → reboot → verify FLAG_SYSTEM)
+6. Update stale docs (FOCUS.md, progress.json, features.json)
+7. Final release preparation (ZIP, version tag, release notes)

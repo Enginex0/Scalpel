@@ -2,7 +2,10 @@
 # shellcheck shell=bash disable=SC3043,SC1090
 MODDIR="${0%/*}"
 
-[ -f "${MODDIR}/disable" ] && exit 0
+[ -f "${MODDIR}/disable" ] && {
+    echo "scalpel[service]: skipped (module disabled)" > /dev/kmsg
+    exit 0
+}
 
 # KSU/APatch fire boot-completed.sh natively after ACTION_BOOT_COMPLETED.
 # On those managers, service.sh has nothing boot-dependent to do.
@@ -22,6 +25,15 @@ while [ "$(getprop sys.boot_completed)" != "1" ]; do
         break
     fi
 done
+
+# Recreate icon symlink (survives module updates)
+. "${MODDIR}/core/logging.sh"
+. "${MODDIR}/core/config.sh"
+config_init 2>/dev/null
+log_init 2>/dev/null
+ln -sf "/data/adb/scalpel/icons" "${MODDIR}/webroot/icons.tmp"
+mv -f "${MODDIR}/webroot/icons.tmp" "${MODDIR}/webroot/icons"
+log_d "service" "symlink: webroot/icons -> /data/adb/scalpel/icons"
 
 . "${MODDIR}/core/post_boot.sh"
 post_boot_run

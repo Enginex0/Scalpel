@@ -1,0 +1,43 @@
+.header {
+  padding: 48px 16px 0;
+}
+
+.header__content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+}
+
+.header__blade {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.header__blade-svg {
+  display: block;
+  filter: drop-shadow(0 0 4px rgba(var(--accent-rgb), 0.4));
+}
+
+.header__text {
+  display: flex;
+  flex-direction: column;
+}
+
+.header__title {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+  line-height: 1.1;
+}
+
+.header__subtitle {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}

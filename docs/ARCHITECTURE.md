@@ -45,7 +45,7 @@ INSTALL (customize.sh):
   3. place binaries (aapt, jq) by arch
   4. scanner.sh → scan all partitions → write app_list.json (ONE TIME)
   5. display default debloat list (package names)
-  6. volume key prompt: UP=apply, DOWN=skip, timeout(7s)=skip
+  6. volume key prompt: UP=apply, DOWN=skip, timeout(8s)=skip
   7. if applied: write nuke_list.json with defaults
 
 BOOT (post-fs-data):
@@ -86,10 +86,10 @@ RUNTIME (WebUI interaction):
 |-----------|---------------|----------|
 | detect.sh | Probe device capabilities, select best mode | core/detect.sh |
 | config.sh | Read/write/migrate persistent config | core/config.sh |
-| bootloop.sh | 3-strike counter, backup/restore | core/bootloop.sh |
+| bootloop.sh | 3-strike counter, backup/restore (uses busybox with fallbacks) | core/bootloop.sh |
 | logging.sh | 5-level logging with rotation | core/logging.sh |
 | scanner.sh | Scan partitions, extract app metadata | core/scanner.sh |
-| mode_zeromount.sh | VFS interception via zm CLI | modes/mode_zeromount.sh |
+| mode_zeromount.sh | Creates whiteouts in module dir, calls sync.sh for delegation | modes/mode_zeromount.sh |
 | mode_whiteout.sh | Overlayfs char device whiteouts | modes/mode_whiteout.sh |
 | mode_mountify.sh | tmpfs + overlayfs standalone | modes/mode_mountify.sh |
 | mode_symlink.sh | Symlink + overlayfs | modes/mode_symlink.sh |
@@ -97,7 +97,7 @@ RUNTIME (WebUI interaction):
 | mode_pm.sh | pm disable/uninstall fallback | modes/mode_pm.sh |
 | promote.sh | APK copy + user uninstall + verification | systemize/promote.sh |
 | permissions.sh | Priv-app XML generation | systemize/permissions.sh |
-| monitor.sh | Background daemon, poll for changes | core/monitor.sh |
+| monitor.sh | Background daemon, poll for changes (sources logging.sh, config.sh, detect.sh; uses jq) | core/monitor.sh |
 | post-fs-data.sh | Boot entry point | post-fs-data.sh |
 | service.sh | Late boot orchestration | service.sh |
 | customize.sh | Installation logic | customize.sh |
@@ -108,7 +108,7 @@ RUNTIME (WebUI interaction):
 ## Integration Points
 
 - **Root manager:** Detected via env vars ($KSU, $APATCH, default=Magisk) at install and boot
-- **ZeroMount:** Detected via /dev/zeromount existence. Uses `zm add`/`zm del` CLI commands
+- **ZeroMount:** Probe checks /dev/zeromount; mode_zeromount.sh verifies module dir + sync.sh. Creates whiteout files (char device c 0 0), then calls sync.sh for delegation. ZeroMount internally handles SUSFS path hiding.
 - **WebUI:** KSU bridge via `ksu.exec()` for all shell operations
 - **Magisk WebUI:** action.sh launches third-party WebUI app (KSUWebUIStandalone/MMRL)
 - **Android PMS:** `pm` commands for disable/enable/uninstall, `dumpsys package` for verification
@@ -127,7 +127,7 @@ ksu.exec() → write nuke_list.json (jq)
   ▼
 nuke engine → detect active mode
   │
-  ├─ ZeroMount? → zm add <vpath> (whiteout path)
+  ├─ ZeroMount? → whiteout_create() + sh sync.sh scalpel
   ├─ Whiteout?  → mknod + setfattr + chcon
   ├─ Mountify?  → tmpfs + overlay mount
   ├─ Symlink?   → symlink + overlay mount
@@ -186,4 +186,4 @@ service.sh → verify FLAG_SYSTEM + sourceDir → report to WebUI
 - Must handle SELinux enforcing — no sepolicy.rule, inherit contexts
 - All shell variables must be quoted (shellcheck compliance)
 - Each script file <200 lines (modular architecture mandate)
-- Dependencies: busybox (required for filesystem modes; bootloop + pm fallback work without it), aapt ARM32+ARM64 (bundled), jq (bundled)
+- Dependencies: busybox (required for filesystem modes; if missing, falls back to pm_deferred mode and boot continues gracefully), aapt ARM32+ARM64 (bundled), jq (bundled)

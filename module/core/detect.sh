@@ -40,6 +40,8 @@ detect_busybox() {
 
 detect_aapt() {
     local _tag="detect"
+    local common_path="${MODDIR}/common/aapt"
+    [ -x "$common_path" ] && { echo "$common_path"; return 0; }
     local abi
     abi=$(getprop ro.product.cpu.abi 2>/dev/null)
     case "$abi" in
@@ -49,7 +51,7 @@ detect_aapt() {
     esac
     local path="${MODDIR}/bin/${abi}/aapt"
     [ -x "$path" ] && { echo "$path"; return 0; }
-    log_w "$_tag" "aapt not found at $path"
+    log_w "$_tag" "aapt not found"
     echo ""
     return 1
 }
@@ -67,6 +69,7 @@ _find_tmpfs_dir() {
     for d in /mnt/vendor /mnt /dev; do
         [ -w "$d" ] && { echo "$d"; return 0; }
     done
+    log_d "detect" "no writable tmpfs dir found"
     return 1
 }
 
