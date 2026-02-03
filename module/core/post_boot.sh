@@ -139,14 +139,16 @@ _verify_systemized_apps() {
             *"/system/"*) pm_ok="true" ;;
         esac
 
-        if [ "$file_ok" = "true" ] && [ "$pm_ok" = "true" ]; then
-            log_i "$_tag" "VERIFIED: $pkg visible at $overlay_path"
+        # VFS file access is the source of truth — pm path reflects PMS database which won't
+        # update until after uninstall + reboot. Trust file_ok alone for uninstall decision.
+        if [ "$file_ok" = "true" ]; then
+            log_i "$_tag" "VERIFIED: $pkg VFS accessible at $overlay_path"
             verified=$((verified + 1))
 
-            # Overlay confirmed active — safe to remove /data/app copy so PMS picks up /system path
+            # VFS working — safe to remove /data/app copy. PMS will discover /system/ on next boot.
             if [ "$needs_uninstall" = "true" ]; then
                 if pm uninstall -k --user 0 "$pkg" >/dev/null 2>&1; then
-                    log_i "$_tag" "deferred uninstall completed: $pkg"
+                    log_i "$_tag" "deferred uninstall completed: $pkg (reboot for PMS to pick up /system/)"
                     local tmp="${sys_list}.tmp.$$"
                     "$jq_bin" --arg p "$pkg" \
                         '[.[] | if .package_name == $p then .needs_uninstall = false else . end]' \
@@ -158,10 +160,10 @@ _verify_systemized_apps() {
                 fi
             fi
         else
-            # Overlay not active — do NOT uninstall or app disappears entirely
-            log_w "$_tag" "FAILED: $pkg NOT visible at $overlay_path (file=$file_ok, pm=$pm_ok)"
+            # VFS not working — do NOT uninstall or app disappears entirely
+            log_w "$_tag" "FAILED: $pkg NOT accessible at $overlay_path"
             if [ "$needs_uninstall" = "true" ]; then
-                log_w "$_tag" "$pkg overlay not active — skipping uninstall, app preserved at /data/app"
+                log_w "$_tag" "$pkg VFS not active — skipping uninstall, app preserved at /data/app"
             fi
             failed=$((failed + 1))
         fi
