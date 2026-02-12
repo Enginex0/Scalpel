@@ -328,7 +328,7 @@ export const api = {
       const filename = `scalpel_packages_${date}.txt`;
       const filePath = `${PATHS.DOWNLOAD_DIR}/${filename}`;
 
-      const { errno, stderr } = await ksuExec(`echo '${packageList.replace(/'/g, "'\\''")}' > "${filePath}"`);
+      const { errno, stderr } = await ksuExec(`echo ${escapeShellArg(packageList)} > ${escapeShellArg(filePath)}`);
       if (errno !== 0) {
         log.error('api', 'exportPackageList: write failed', stderr);
         return { success: false, error: 'Failed to write file' };

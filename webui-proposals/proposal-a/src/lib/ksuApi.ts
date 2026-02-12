@@ -1,4 +1,4 @@
-import type { KsuPackageInfo, KsuPackageIcon } from './ksu.d.ts';
+import type { KsuPackageInfo } from './ksu.d.ts';
 import { log } from './logger';
 
 interface KsuExecResult {
@@ -17,17 +17,6 @@ function isKsuPackageInfo(obj: unknown): obj is KsuPackageInfo {
     obj !== null &&
     'packageName' in obj &&
     typeof (obj as KsuPackageInfo).packageName === 'string'
-  );
-}
-
-function isKsuPackageIcon(obj: unknown): obj is KsuPackageIcon {
-  return (
-    typeof obj === 'object' &&
-    obj !== null &&
-    'packageName' in obj &&
-    'icon' in obj &&
-    typeof (obj as KsuPackageIcon).packageName === 'string' &&
-    typeof (obj as KsuPackageIcon).icon === 'string'
   );
 }
 
@@ -71,15 +60,12 @@ export async function ksuExec(cmd: string, timeoutMs = 30000): Promise<KsuExecRe
   });
 }
 
-export async function listPackages(type: 'all' | 'user' | 'system'): Promise<string[]> {
+export async function listPackages(type: 'all' | 'user' | 'system' = 'all'): Promise<string[]> {
   const ksu = globalThis.ksu;
 
-  const methodMap = { all: 'listAllPackages', user: 'listUserPackages', system: 'listSystemPackages' } as const;
-  const methodName = methodMap[type];
-
-  if (ksu?.[methodName]) {
+  if (ksu?.listPackages) {
     try {
-      const result = (ksu[methodName] as () => string)();
+      const result = ksu.listPackages(type);
       if (result) {
         const parsed = JSON.parse(result);
         if (Array.isArray(parsed)) {
@@ -92,8 +78,8 @@ export async function listPackages(type: 'all' | 'user' | 'system'): Promise<str
     }
   }
 
-  const pmFlags = { all: '', user: '-3', system: '-s' };
-  const { stdout, errno, stderr } = await ksuExec(`pm list packages ${pmFlags[type]} | sed 's/package://'`);
+  const flags = type === 'user' ? '-3' : type === 'system' ? '-s' : '';
+  const { stdout, errno, stderr } = await ksuExec(`pm list packages ${flags} | sed 's/package://'`);
   if (errno === 0 && stdout.trim()) {
     const pkgs = stdout.trim().split('\n').filter(Boolean);
     log.debug('ksuApi', `listPackages(${type}): ${pkgs.length} via pm`);
@@ -142,32 +128,3 @@ export async function getPackagesInfo(packageNames: string[]): Promise<KsuPackag
   return results;
 }
 
-export async function getPackagesIcons(
-  packageNames: string[],
-  size = 100
-): Promise<KsuPackageIcon[]> {
-  if (!packageNames.length) return [];
-
-  const ksu = globalThis.ksu;
-
-  if (ksu?.getPackagesIcons) {
-    try {
-      const result = ksu.getPackagesIcons(JSON.stringify(packageNames), size);
-      if (result) {
-        const parsed: unknown = JSON.parse(result);
-        if (Array.isArray(parsed) && parsed.every(isKsuPackageIcon)) {
-          log.debug('ksuApi', `getPackagesIcons: ${parsed.length} via native API`);
-          return parsed;
-        }
-      }
-    } catch (e) {
-      log.debug('ksuApi', 'getPackagesIcons: native API failed', String(e));
-    }
-  }
-
-  log.debug('ksuApi', `getPackagesIcons: no icons available for ${packageNames.length} packages`);
-  return packageNames.map((packageName) => ({
-    packageName,
-    icon: '',
-  }));
-}

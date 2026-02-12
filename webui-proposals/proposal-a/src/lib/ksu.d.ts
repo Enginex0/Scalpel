@@ -9,18 +9,14 @@ interface KsuPackageInfo {
   isSystem?: boolean;
 }
 
-interface KsuPackageIcon {
-  packageName: string;
-  icon: string;
-}
-
 interface KsuNativeApi {
   exec(cmd: string, options: string, callbackName: string): void;
-  listAllPackages?(): string;
-  listUserPackages?(): string;
-  listSystemPackages?(): string;
+  listPackages?(type: string): string;
   getPackagesInfo?(packageNamesJson: string): string;
-  getPackagesIcons?(packageNamesJson: string, size: number): string;
+  toast?(message: string): void;
+  fullScreen?(isFullScreen: boolean): void;
+  moduleInfo?(): string;
+  spawn?(command: string, optionsJson: string, callbackName: string): number;
 }
 
 declare global {
@@ -36,7 +32,6 @@ declare module 'kernelsu' {
   export function exec(command: string): Promise<{ errno: number; stdout: string; stderr: string }>;
   export function listPackages(type?: 'user' | 'system' | 'all'): string[];
   export function getPackagesInfo(packages: string[]): KsuPackageInfo[];
-  export function getPackagesIcons(packages: string[], size?: number): KsuPackageIcon[];
   export function spawn(command: string, env?: Record<string, string>, cwd?: string): {
     stdout: ReadableStream<string>;
     stderr: ReadableStream<string>;
@@ -44,4 +39,4 @@ declare module 'kernelsu' {
   };
 }
 
-export type { KsuNativeApi, KsuPackageInfo, KsuPackageIcon };
+export type { KsuNativeApi, KsuPackageInfo };

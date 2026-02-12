@@ -4,6 +4,3 @@ version=v0.1.0
 versionCode=1
 author=Enginex0
 description=⚕️ Clinical debloater + systemizer with multi-mode auto-detection
-#updateJson=https://raw.githubusercontent.com/OWNER/scalpel/main/update.json
-#actionIcon=webroot/assets/icon.png
-#webuiIcon=webroot/assets/icon.png

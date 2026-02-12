@@ -1,5 +1,4 @@
 import { onCleanup } from 'solid-js';
-import { getPackagesIcons } from '../../lib/ksuApi';
 import './AppIcon.css';
 
 interface AppIconProps {
@@ -65,16 +64,17 @@ function setupKsuIcon(container: HTMLElement, packageName: string, isDisposed: (
         return;
       }
 
-      getPackagesIcons([packageName], 100).then((icons) => {
-        if (isDisposed()) return;
-        const dataUri = icons[0]?.icon;
-        if (dataUri) {
-          ksuIconCache.set(packageName, dataUri);
-          setImgSrc(img, dataUri);
-        } else {
-          showFallback(img);
+      const iconImg = new Image();
+      iconImg.src = `ksu://icon/${packageName}`;
+      iconImg.onload = () => {
+        if (!isDisposed()) {
+          ksuIconCache.set(packageName, iconImg.src);
+          setImgSrc(img, iconImg.src);
         }
-      }).catch(() => showFallback(img));
+      };
+      iconImg.onerror = () => {
+        if (!isDisposed()) showFallback(img);
+      };
     }
   }, { rootMargin: '100px', threshold: 0.1 });
 
