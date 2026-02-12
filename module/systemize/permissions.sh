@@ -25,7 +25,7 @@ generate_permissions() {
     perms=$(_extract_permissions "$base_apk" "$pkg")
 
     local perm_count=0
-    [ -n "$perms" ] && perm_count=$(echo "$perms" | wc -l)
+    [ -n "$perms" ] && perm_count=$(echo "$perms" | wc -l | tr -d '[:space:]')
 
     if [ "$perm_count" -eq 0 ]; then
         local enforce
@@ -122,6 +122,8 @@ _write_xml() {
     local pkg="$1"
     local perms="$2"
     local xml_file="$3"
+
+    case "$pkg" in *[!a-zA-Z0-9._]*) log_e "$_tag" "invalid package name: $pkg"; return 1 ;; esac
 
     # Atomic write via tmp+mv prevents partial XML on crash/reboot
     local tmp="${xml_file}.tmp.$$"

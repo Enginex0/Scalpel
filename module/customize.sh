@@ -4,7 +4,7 @@
 
 SCALPEL_DATA="/data/adb/scalpel"
 
-[ -z "$MODPATH" ] && { echo "[ERROR] MODPATH undefined"; exit 1; }
+[ -z "$MODPATH" ] && abort "MODPATH undefined"
 
 ui_print "-----------------------------------"
 ui_print "  Scalpel - Precision Debloater"

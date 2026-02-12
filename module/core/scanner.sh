@@ -176,7 +176,7 @@ scanner_run() {
                 _extract_icon "$apk" "$pkg" "$aapt" &
                 scanned=$((scanned + 1))
                 # Drain background icon extractions every 20 apps to avoid OOM
-                [ $((scanned % 20)) -eq 0 ] && wait
+                [ $((scanned % 8)) -eq 0 ] && wait
             done
         done
     done
@@ -253,7 +253,7 @@ EOF
 
 # Direct invocation from WebUI bridge
 _init_standalone() {
-    [ -z "$MODDIR" ] && MODDIR="/data/adb/modules/scalpel"
+    [ -z "$MODDIR" ] && MODDIR="$(dirname "$(dirname "$(readlink -f "$0")")")"
     if ! command -v log_i >/dev/null 2>&1; then
         . "$MODDIR/core/config.sh"
         config_init 2>/dev/null

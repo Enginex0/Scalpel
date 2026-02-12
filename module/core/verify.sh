@@ -42,7 +42,7 @@ verify_run() {
     if [ -f "$STATUS_FILE" ]; then
         mode="$("$jq_bin" -r '.mode // ""' "$STATUS_FILE" 2>/dev/null)"
     fi
-    if [ -z "$mode" ] || [ "$mode" = "unknown" ] || [ "$mode" = "none" ] || [ "$mode" = "null" ] || [ "$mode" = "running" ] || [ "$mode" = "pm_deferred" ] || [ "$mode" = "error" ]; then
+    if [ -z "$mode" ] || [ "$mode" = "unknown" ] || [ "$mode" = "none" ] || [ "$mode" = "null" ] || [ "$mode" = "running" ] || [ "$mode" = "pm_deferred" ] || [ "$mode" = "error" ] || [ "$mode" = "partial" ]; then
         mode="$(detect_mode)"
     fi
     if [ -z "$mode" ]; then

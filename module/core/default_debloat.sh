@@ -42,14 +42,16 @@ apply_default_debloat() {
         [ -z "$pkgs" ] && { log_w "$_tag" "no safe/google packages in categories"; return 0; }
 
         : > "$entries"
-        echo "$pkgs" | while IFS= read -r pkg; do
+        while IFS= read -r pkg; do
             [ -z "$pkg" ] && continue
             local path
             path=$(pm path "$pkg" 2>/dev/null | head -1 | sed 's/^package://')
             [ -z "$path" ] && continue
             "$jq_bin" -n --arg p "$pkg" --arg a "$path" \
                 '{"app_name":$p,"package_name":$p,"app_path":$a}' >> "$entries"
-        done
+        done <<EOF
+$pkgs
+EOF
 
         "$jq_bin" -s '.' "$entries" > "$tmp" 2>/dev/null
         rm -f "$entries"

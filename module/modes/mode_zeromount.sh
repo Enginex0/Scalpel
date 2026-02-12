@@ -55,6 +55,11 @@ mode_debloat() {
 
     whiteout_fix_vendor_symlinks "$moddir"
 
+    if [ ! -f "$_ZM_SYNC" ]; then
+        log_e "$_tag" "zeromount sync.sh not found: $_ZM_SYNC"
+        return 1
+    fi
+
     if sh "$_ZM_SYNC" scalpel >/dev/null 2>&1; then
         _zm_register_whiteout "$moddir" "$app_path"
         log_i "$_tag" "hidden $pkg (via zeromount sync)"
