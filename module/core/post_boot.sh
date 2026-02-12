@@ -230,12 +230,7 @@ _finish_deferred_debloat() {
 
 # Exactly-once gate: first caller wins, second caller exits early
 _post_boot_acquire() {
-    [ -f "$_POST_BOOT_FLAG" ] && return 1
-    echo "$$" > "$_POST_BOOT_FLAG" 2>/dev/null
-    # Race guard: re-read to confirm we won
-    local written
-    written="$(cat "$_POST_BOOT_FLAG" 2>/dev/null)"
-    [ "$written" = "$$" ]
+    mkdir "$_POST_BOOT_FLAG" 2>/dev/null
 }
 
 post_boot_run() {

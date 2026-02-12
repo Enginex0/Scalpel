@@ -44,6 +44,11 @@ _write_status() {
     }
 }
 
+_nuke_unlock() {
+    exec 8>&- 2>/dev/null
+    rm -f "${SCALPEL_DATA}/nuke.lock" 2>/dev/null
+}
+
 nuke_run() {
     local _tag="nuke"
     . "${MODDIR}/core/logging.sh"
@@ -62,8 +67,11 @@ nuke_run() {
     log_i "$_tag" "starting debloat run"
 
     local _nuke_lock="${SCALPEL_DATA}/nuke.lock"
-    if ! echo "$$" > "$_nuke_lock" 2>/dev/null; then
-        log_w "$_tag" "failed to create nuke lock (continuing anyway)"
+    exec 8>"$_nuke_lock"
+    if ! flock -n 8; then
+        log_w "$_tag" "another nuke_run is active, skipping"
+        exec 8>&-
+        return 1
     fi
 
     # Mark in-flight so service.sh can detect interrupted runs (KSU 10s kill)
@@ -77,7 +85,7 @@ nuke_run() {
     if [ ! -f "$NUKE_LIST" ]; then
         log_i "$_tag" "no nuke list found, nothing to do"
         _write_status "$mode" 0 0
-        rm -f "$_nuke_lock"
+        _nuke_unlock
         return 0
     fi
 
@@ -86,7 +94,7 @@ nuke_run() {
 
     if ! "$jq_bin" '.' "$NUKE_LIST" >/dev/null 2>&1; then
         log_e "$_tag" "nuke_list.json is invalid JSON"
-        rm -f "$_nuke_lock"
+        _nuke_unlock
         return 1
     fi
 
@@ -99,14 +107,14 @@ nuke_run() {
     if [ "$count" = "0" ]; then
         log_i "$_tag" "nuke list empty, nothing to do"
         _write_status "$mode" 0 0
-        rm -f "$_nuke_lock"
+        _nuke_unlock
         return 0
     fi
 
     if [ "$mode" = "pm_deferred" ]; then
         log_i "$_tag" "no filesystem mode available, deferring to service.sh for pm"
         _write_status "pm_deferred" 0 "$count"
-        rm -f "$_nuke_lock"
+        _nuke_unlock
         return 0
     fi
 
@@ -114,7 +122,7 @@ nuke_run() {
     if [ ! -f "$mode_script" ]; then
         log_e "$_tag" "mode script not found: $mode_script"
         _write_status "error" 0 0
-        rm -f "$_nuke_lock"
+        _nuke_unlock
         return 1
     fi
     . "$mode_script"
@@ -122,7 +130,7 @@ nuke_run() {
     if ! mode_probe; then
         log_e "$_tag" "mode $mode probe failed"
         _write_status "error" 0 0
-        rm -f "$_nuke_lock"
+        _nuke_unlock
         return 1
     fi
 
@@ -145,7 +153,7 @@ nuke_run() {
 $("$jq_bin" -r '.[].package_name' "$NUKE_LIST" 2>/dev/null)
 EOF
         _write_status "pm" "$success" "$failed"
-        rm -f "$_nuke_lock"
+        _nuke_unlock
         log_i "$_tag" "disable-only complete: success=$success failed=$failed"
         [ "$failed" -gt 0 ] && return 1
         return 0
@@ -178,7 +186,7 @@ EOF
     if [ ! -s "$tmp" ]; then
         log_e "$_tag" "failed to parse nuke list"
         rm -f "$tmp"
-        rm -f "$_nuke_lock"
+        _nuke_unlock
         return 1
     fi
 
@@ -214,6 +222,10 @@ EOF
         local _line _raw_pkg
         while IFS= read -r _line; do
             case "$_line" in '#'*|'') continue ;; esac
+            case "$_line" in
+                /system/*|/vendor/*|/product/*|/system_ext/*|/oem/*|/odm/*) ;;
+                *) log_w "$_tag" "raw: skipping invalid path: $_line"; continue ;;
+            esac
             _raw_pkg="raw:${_line##*/}"
             if mode_debloat "$_raw_pkg" "${_line}/_.apk"; then
                 log_d "$_tag" "raw hidden: $_line"
@@ -252,7 +264,7 @@ EOF
     fi
 
     _write_status "$mode" "$success" "$failed" "$_timed_out"
-    rm -f "$_nuke_lock"
+    _nuke_unlock
 
     if [ "$_timed_out" = "true" ]; then
         log_i "$_tag" "partial: mode=$mode success=$success failed=$failed (timeout, rest deferred)"

@@ -3,7 +3,7 @@
 MODDIR="${0%/*}"
 
 # Clear the post-boot flag so service.sh/boot-completed.sh can claim it fresh
-rm -f "/data/adb/scalpel/boot_completed_handled" 2>/dev/null
+rm -rf "/data/adb/scalpel/boot_completed_handled" 2>/dev/null
 
 # 3-strike bootloop protection -- must run before anything else
 . "${MODDIR}/core/bootloop.sh"

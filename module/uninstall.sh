@@ -17,13 +17,23 @@ _log() { echo "scalpel-uninstall: $1" >> /dev/kmsg 2>/dev/null; }
 
 _log "starting module removal"
 
-# Stop the monitor daemon before touching data files
+# Signal removal intent (supervisor checks this each restart cycle)
+touch "${MODPATH}/remove" 2>/dev/null
+
 _pid_file="${SCALPEL_DATA}/monitor.pid"
 if [ -f "$_pid_file" ]; then
     _mpid="$(cat "$_pid_file" 2>/dev/null)"
-    [ -n "$_mpid" ] && kill "$_mpid" 2>/dev/null
-    rm -f "$_pid_file"
+    if [ -n "$_mpid" ] && kill -0 "$_mpid" 2>/dev/null; then
+        kill "$_mpid" 2>/dev/null
+        _w=0
+        while [ "$_w" -lt 20 ] && kill -0 "$_mpid" 2>/dev/null; do
+            sleep 0.1 2>/dev/null || sleep 1
+            _w=$((_w + 1))
+        done
+        kill -0 "$_mpid" 2>/dev/null && kill -9 "$_mpid" 2>/dev/null
+    fi
 fi
+rm -f "$_pid_file" "${SCALPEL_DATA}/monitor.lock"
 
 # Restore debloated apps from both app_list.json and nuke_list.json
 _tmp_pkgs="/data/local/tmp/scalpel_uninstall.$$"
