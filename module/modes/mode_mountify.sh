@@ -109,7 +109,7 @@ mode_verify() {
     app_dir=$(dirname "$app_path")
 
     # Mount presence alone confirms debloat -- PMS may create transient files inside the tmpfs
-    busybox mount | grep -qF " on ${app_dir} type tmpfs"
+    busybox mountpoint -q "$app_dir" 2>/dev/null
 }
 
 mode_cleanup() {

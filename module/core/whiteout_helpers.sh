@@ -36,6 +36,7 @@ whiteout_create() {
     # busybox mknod preferred; toybox mknod (stock since Android 6) as fallback
     if ! busybox mknod "$wo_path" c 0 0 2>/dev/null && ! mknod "$wo_path" c 0 0 2>/dev/null; then
         log_e "$_tag" "mknod failed: $wo_path"
+        rmdir "${target_dir}${parent_dir}" 2>/dev/null
         return 1
     fi
 

@@ -30,11 +30,13 @@ mode_probe() {
         log_d "$_tag" "probe: busybox not found"
         return 1
     fi
-    if ! busybox --list 2>&1 | grep -qF "mknod"; then
+    local _bb_caps
+    _bb_caps="$(busybox --list 2>&1)"
+    if ! echo "$_bb_caps" | grep -qF "mknod"; then
         log_d "$_tag" "probe: busybox lacks mknod"
         return 1
     fi
-    if ! busybox --list 2>&1 | grep -qF "setfattr"; then
+    if ! echo "$_bb_caps" | grep -qF "setfattr"; then
         log_d "$_tag" "probe: busybox lacks setfattr"
         return 1
     fi
