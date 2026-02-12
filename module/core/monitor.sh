@@ -9,6 +9,7 @@ STATUS_FILE="${SCALPEL_DATA}/status.json"
 SYSTEMIZE_LIST="${SCALPEL_DATA}/systemize_list.json"
 PID_FILE="${SCALPEL_DATA}/monitor.pid"
 NUKE_LOCK="${SCALPEL_DATA}/nuke.lock"
+LOCK_FILE="${SCALPEL_DATA}/monitor.lock"
 
 _cleanup() {
     rm -f "$PID_FILE"
@@ -20,19 +21,18 @@ _is_pid_alive() {
 }
 
 _acquire_singleton() {
-    if [ -f "$PID_FILE" ]; then
-        local old_pid
-        old_pid="$(cat "$PID_FILE" 2>/dev/null)"
-        if _is_pid_alive "$old_pid"; then
-            return 1
-        fi
-        rm -f "$PID_FILE"
+    exec 9>"$LOCK_FILE"
+    if ! flock -n 9; then
+        return 1
     fi
     echo "$$" > "$PID_FILE"
-    # Verify we won the race (re-read after write)
-    local written
-    written="$(cat "$PID_FILE" 2>/dev/null)"
-    [ "$written" = "$$" ]
+    return 0
+}
+
+_is_nuke_running() {
+    [ ! -f "$NUKE_LOCK" ] && return 1
+    ( exec 8>"$NUKE_LOCK"; flock -n 8 ) 2>/dev/null && { rm -f "$NUKE_LOCK"; return 1; }
+    return 0
 }
 
 _jq() {
@@ -44,7 +44,7 @@ _jq() {
 _check_debloated_apps() {
     local _tag="monitor"
     [ ! -f "$NUKE_LIST" ] && return 0
-    [ -f "$NUKE_LOCK" ] && return 0
+    _is_nuke_running && return 0
 
     local mode=""
     if [ -f "$STATUS_FILE" ]; then
@@ -71,7 +71,7 @@ _check_debloated_apps() {
         if ! mode_verify "$pkg" "$app_path"; then
             log_w "$_tag" "debloat reverted: $pkg"
             # Concurrent nuke.sh may have started between check and here
-            if [ -f "$NUKE_LOCK" ]; then
+            if _is_nuke_running; then
                 log_d "$_tag" "nuke lock appeared, aborting repair cycle"
                 break
             fi
@@ -170,7 +170,9 @@ _update_description() {
     printf '%s' "$desc" > "${MODDIR}/override.description" 2>/dev/null
 
     # Magisk reads module.prop directly
-    sed -i "s|^description=.*|description=${desc}|" "$prop_file" 2>/dev/null
+    awk -v d="$desc" '{if(/^description=/){print "description=" d}else{print}}' "$prop_file" > "${prop_file}.tmp.$$" \
+        && mv "${prop_file}.tmp.$$" "$prop_file" \
+        || rm -f "${prop_file}.tmp.$$"
 }
 
 monitor_start() {
