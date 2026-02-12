@@ -134,7 +134,7 @@ nuke_run() {
         local success=0 failed=0 pkg
         while read -r pkg; do
             [ -z "$pkg" ] && continue
-            if pm disable "$pkg" >/dev/null 2>&1; then
+            if pm disable-user --user 0 "$pkg" >/dev/null 2>&1; then
                 success=$((success + 1))
                 log_d "$_tag" "disabled: $pkg"
             else
@@ -157,7 +157,7 @@ EOF
         local _pkg
         while read -r _pkg; do
             [ -z "$_pkg" ] && continue
-            pm disable "$_pkg" >/dev/null 2>&1 || true
+            pm disable-user --user 0 "$_pkg" >/dev/null 2>&1 || true
         done <<EOF
 $("$jq_bin" -r '.[].package_name' "$NUKE_LIST" 2>/dev/null)
 EOF

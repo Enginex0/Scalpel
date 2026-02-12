@@ -144,10 +144,7 @@ mode_cleanup() {
     # Wipe all overlay partition dirs from the module directory
     local target_dir="${MODDIR:-/data/adb/modules/scalpel}"
     local dir
-    for dir in system system_ext vendor product odm oem \
-        mi_ext my_bigball my_carrier my_company my_engineering \
-        my_heytap my_manifest my_preload my_product my_region \
-        my_reserve my_stock; do
+    for dir in $_WH_ALL_PARTITIONS; do
         [ -e "${target_dir}/${dir}" ] && rm -rf "${target_dir}/${dir}" 2>/dev/null
     done
 

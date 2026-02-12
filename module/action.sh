@@ -83,8 +83,11 @@ _update_description() {
     local desc="${debloated} debloated, ${systemized} systemized [${mode}]"
 
     if [ "$KSU" = "true" ] && command -v ksud >/dev/null 2>&1; then
-        ksud module config set override.description "$desc" 2>/dev/null
+        KSU_MODULE=scalpel ksud module config set override.description "$desc" 2>/dev/null
         log_d "$_tag" "updated description: $desc"
+    elif [ "$APATCH" = "true" ]; then
+        printf '%s' "$desc" > "${MODDIR}/override.description" 2>/dev/null
+        log_d "$_tag" "updated description (APatch): $desc"
     fi
 }
 

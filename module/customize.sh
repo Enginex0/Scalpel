@@ -161,12 +161,12 @@ _detect_capabilities() {
         if [ "$_has_busybox" = "true" ]; then
             _mode="mountify"
             ui_print "  [✓] Mountify (tmpfs overlay) available"
-        elif [ "$_has_overlayfs" = "true" ]; then
-            _mode="symlink"
-            ui_print "  [✓] Symlink overlay available"
         elif [ "$_has_overlayfs" = "true" ] && [ "$_has_xattr" = "true" ]; then
             _mode="whiteout"
             ui_print "  [✓] OverlayFS whiteout available"
+        elif [ "$_has_overlayfs" = "true" ]; then
+            _mode="symlink"
+            ui_print "  [✓] Symlink overlay available"
         elif [ "$_has_magic" = "true" ]; then
             _mode="magisk"
             ui_print "  [✓] Magic mount available"

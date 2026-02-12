@@ -2,7 +2,13 @@
 # shellcheck shell=bash disable=SC3043,SC1090
 # Shared whiteout creation/removal/verification -- sourced by mode_whiteout and mode_magisk
 
-# OEM vendor partitions that may be symlinked under /system/
+# Canonical partition lists — single source of truth for overlay cleanup and vendor fixup
+# (bootloop.sh maintains its own copy due to zero-dependency constraint)
+_WH_ALL_PARTITIONS="system system_ext vendor product odm oem \
+mi_ext my_bigball my_carrier my_company my_engineering \
+my_heytap my_manifest my_preload my_product my_region \
+my_reserve my_stock"
+
 _WH_VENDOR_PARTS="mi_ext my_bigball my_carrier my_company my_engineering \
 my_heytap my_manifest my_preload my_product my_region my_reserve my_stock"
 

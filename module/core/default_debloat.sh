@@ -10,7 +10,8 @@ apply_default_debloat() {
     local jq_bin="${modpath}/bin/jq"
     [ ! -x "$jq_bin" ] && jq_bin="jq"
 
-    local categories="${modpath}/webroot/categories.json"
+    local categories="${modpath}/data/categories.json"
+    [ ! -f "$categories" ] && categories="${SCALPEL_DATA:-/data/adb/scalpel}/categories.json"
     local app_list="${SCALPEL_DATA:-/data/adb/scalpel}/app_list.json"
     local nuke_list="${SCALPEL_DATA:-/data/adb/scalpel}/nuke_list.json"
 

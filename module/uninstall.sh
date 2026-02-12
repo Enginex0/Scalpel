@@ -36,12 +36,15 @@ done
 if [ -s "$_tmp_pkgs" ]; then
     _log "restoring debloated apps"
     _restore_fail=0
-    sort -u "$_tmp_pkgs" | while IFS= read -r pkg; do
+    _sorted="/data/local/tmp/scalpel_uninstall_sorted.$$"
+    sort -u "$_tmp_pkgs" > "$_sorted"
+    while IFS= read -r pkg; do
         [ -z "$pkg" ] && continue
         if ! pm install-existing "$pkg" >/dev/null 2>&1; then
             pm enable "$pkg" >/dev/null 2>&1 || { _restore_fail=$((_restore_fail + 1)); _log "failed to restore: $pkg"; }
         fi
-    done
+    done < "$_sorted"
+    rm -f "$_sorted"
     [ "$_restore_fail" -gt 0 ] && _log "WARNING: ${_restore_fail} packages failed to restore"
 fi
 rm -f "$_tmp_pkgs"

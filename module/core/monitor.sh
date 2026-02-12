@@ -143,88 +143,34 @@ _update_description() {
     local prop_file="${MODDIR}/module.prop"
     [ ! -f "$prop_file" ] && return 0
 
-    local debloated=0
-    if [ -f "$NUKE_LIST" ]; then
-        debloated="$(_jq 'length' "$NUKE_LIST" 2>/dev/null)"
-        debloated="${debloated:-0}"
-    fi
+    local debloated=0 systemized=0 mode="none" repairs=0
 
-    local systemized=0
-    if [ -f "$SYSTEMIZE_LIST" ]; then
-        systemized="$(_jq 'length' "$SYSTEMIZE_LIST" 2>/dev/null)"
-        systemized="${systemized:-0}"
-    fi
+    [ -f "$NUKE_LIST" ] && debloated="$(_jq 'length' "$NUKE_LIST" 2>/dev/null)"
+    debloated="${debloated:-0}"
 
-    local mode=""
+    [ -f "$SYSTEMIZE_LIST" ] && systemized="$(_jq 'length' "$SYSTEMIZE_LIST" 2>/dev/null)"
+    systemized="${systemized:-0}"
+
     if [ -f "$STATUS_FILE" ]; then
-        mode="$(_jq -r '.mode // ""' "$STATUS_FILE" 2>/dev/null)"
-    fi
-
-    local repairs=0
-    if [ -f "$STATUS_FILE" ]; then
+        mode="$(_jq -r '.mode // "none"' "$STATUS_FILE" 2>/dev/null)"
         repairs="$(_jq -r '.monitor_repairs // 0' "$STATUS_FILE" 2>/dev/null)"
     fi
+    [ "$mode" = "null" ] && mode="none"
 
-    local desc=""
-    if [ "$repairs" -gt 0 ] 2>/dev/null; then
-        desc="⚠️ $repairs repairs needed"
-        [ "$debloated" -gt 0 ] 2>/dev/null && desc="$desc | $debloated Debloated"
-        [ -n "$mode" ] && [ "$mode" != "null" ] && [ "$mode" != "none" ] && desc="$desc | $mode"
-    elif [ "$debloated" -gt 0 ] 2>/dev/null || [ "$systemized" -gt 0 ] 2>/dev/null; then
-        desc="⚕️ Active"
-        [ "$debloated" -gt 0 ] 2>/dev/null && desc="$desc | $debloated Debloated"
-        [ "$systemized" -gt 0 ] 2>/dev/null && desc="$desc | $systemized Systemized"
-        [ -n "$mode" ] && [ "$mode" != "null" ] && [ "$mode" != "none" ] && desc="$desc | $mode"
-    else
-        desc="😴 Idle — Ready to operate"
-    fi
+    local desc="Mode: ${mode} | Debloated: ${debloated} | Systemized: ${systemized} | Monitor: active"
+    [ "$repairs" -gt 0 ] 2>/dev/null && desc="${desc} | Repairs: ${repairs}"
 
-    # KSU: use native API (takes precedence over file)
+    # KSU persistent description override (survives reboots, shown in manager)
     local ksud_bin="/data/adb/ksud"
     if [ "$KSU" = "true" ] && [ -x "$ksud_bin" ]; then
-        "$ksud_bin" module config set override.description "$desc" 2>/dev/null
+        KSU_MODULE=scalpel "$ksud_bin" module config set override.description "$desc" 2>/dev/null
     fi
 
-    # Write file for APatch and as fallback
+    # APatch fallback
     printf '%s' "$desc" > "${MODDIR}/override.description" 2>/dev/null
 
     # Magisk reads module.prop directly
-    sed -i "s|^description=.*|description=$desc|" "$prop_file" 2>/dev/null
-}
-
-_generate_status_cache() {
-    local cache_file="${SCALPEL_DATA}/status_cache.json"
-
-    local kernel_ver device_model android_ver selinux_status
-    kernel_ver="$(uname -r 2>/dev/null || echo 'unknown')"
-    device_model="$(getprop ro.product.model 2>/dev/null || echo 'unknown')"
-    android_ver="$(getprop ro.build.version.release 2>/dev/null || echo 'unknown')"
-    selinux_status="$(getenforce 2>/dev/null || echo 'unknown')"
-
-    local uptime_sec uptime_h uptime_m uptime_str
-    uptime_sec="$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)"
-    uptime_h=$((uptime_sec / 3600))
-    uptime_m=$(((uptime_sec % 3600) / 60))
-    uptime_str="${uptime_h}h ${uptime_m}m"
-
-    local debloated=0 systemized=0 repairs=0
-    [ -f "$NUKE_LIST" ] && debloated="$(_jq 'length' "$NUKE_LIST" 2>/dev/null)" && debloated="${debloated:-0}"
-    [ -f "$SYSTEMIZE_LIST" ] && systemized="$(_jq 'length' "$SYSTEMIZE_LIST" 2>/dev/null)" && systemized="${systemized:-0}"
-    [ -f "$STATUS_FILE" ] && repairs="$(_jq -r '.monitor_repairs // 0' "$STATUS_FILE" 2>/dev/null)"
-
-    local mode="none"
-    [ -f "$STATUS_FILE" ] && mode="$(_jq -r '.mode // "none"' "$STATUS_FILE" 2>/dev/null)"
-    [ "$mode" = "null" ] && mode="none"
-
-    local timestamp
-    timestamp="$(date +%s)000"
-
-    # Single-line JSON for WebUI consumption
-    if ! printf '{"debloatedCount":%d,"systemizedCount":%d,"repairsCount":%d,"mode":"%s","kernelVersion":"%s","deviceModel":"%s","androidVersion":"%s","selinuxStatus":"%s","uptime":"%s","monitorPid":%d,"timestamp":%s}\n' \
-        "$debloated" "$systemized" "$repairs" "$mode" "$kernel_ver" "$device_model" "$android_ver" "$selinux_status" "$uptime_str" "$$" "$timestamp" \
-        > "$cache_file" 2>/dev/null; then
-        log_w "$_tag" "failed to write status cache"
-    fi
+    sed -i "s|^description=.*|description=${desc}|" "$prop_file" 2>/dev/null
 }
 
 monitor_start() {
@@ -252,7 +198,6 @@ monitor_start() {
     log_i "$_tag" "started (pid=$$, interval=${interval}s)"
 
     _update_description
-    _generate_status_cache
 
     while true; do
         sleep "$interval"
@@ -266,7 +211,6 @@ monitor_start() {
         _check_systemized_apps
 
         _update_description
-        _generate_status_cache
     done
 
     _cleanup

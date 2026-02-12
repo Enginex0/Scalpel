@@ -4,11 +4,7 @@
 
 SCALPEL_NUKE_LIST="${SCALPEL_DATA:-/data/adb/scalpel}/nuke_list.json"
 
-# Overlay partition dirs to wipe on cleanup (mirrors bootloop.sh)
-_WO_CLEANUP_DIRS="system system_ext vendor product odm oem \
-mi_ext my_bigball my_carrier my_company my_engineering \
-my_heytap my_manifest my_preload my_product my_region \
-my_reserve my_stock"
+# Cleanup dirs sourced from whiteout_helpers.sh via _WH_ALL_PARTITIONS
 
 _whiteout_helpers_loaded=""
 
@@ -123,7 +119,7 @@ mode_cleanup() {
 
     # Remove all overlay directories from module dir
     local dir
-    for dir in $_WO_CLEANUP_DIRS; do
+    for dir in $_WH_ALL_PARTITIONS; do
         rm -rf "${MODDIR:?}/${dir}" 2>/dev/null
     done
 
