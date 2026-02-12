@@ -55,6 +55,11 @@ bootloop_init() {
 
 # If counter hit threshold, nuke everything and disable. Called from post-fs-data.sh.
 bootloop_check() {
+    case "$MODDIR" in
+        /data/adb/modules/*) ;;
+        *) _bl_log "FATAL: MODDIR outside modules dir: $MODDIR"; return 1 ;;
+    esac
+
     if [ "$BOOTCOUNT" -ge 3 ] 2>/dev/null; then
         _bl_log "FATAL: bootloop detected, strike ${BOOTCOUNT} -- initiating recovery"
 
@@ -70,11 +75,13 @@ bootloop_check() {
 
         touch "$MODDIR/disable" || _bl_log "WARN failed to create disable marker"
 
-        # Inform user via module description
         local _bl_desc="Bootloop protection triggered. Module disabled. Re-enable manually."
-        if [ "$KSU" = "true" ] && command -v ksud >/dev/null 2>&1; then
-            ksud module config set override.description "$_bl_desc" 2>/dev/null
+        local _bl_ksud="/data/adb/ksud"
+        if [ "$KSU" = "true" ] && [ -x "$_bl_ksud" ]; then
+            KSU_MODULE=scalpel "$_bl_ksud" module config set override.description "$_bl_desc" 2>/dev/null
         fi
+        # Magisk + APatch fallback
+        printf '%s' "$_bl_desc" > "${MODDIR}/override.description" 2>/dev/null
         if [ -f "$MODDIR/module.prop" ]; then
             sed -i "s|^description=.*|description=${_bl_desc}|" \
                 "$MODDIR/module.prop" 2>/dev/null
