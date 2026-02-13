@@ -101,16 +101,10 @@ ui_print "  Detecting system capabilities..."
 _detect_capabilities() {
     local _mode=""
 
-    # Check ZeroMount (highest priority)
+    # ZeroMount VFS — device node indicates kernel driver is active
     if [ -e "/dev/zeromount" ]; then
-        local _zm=""
-        command -v zm >/dev/null 2>&1 && _zm="zm"
-        [ -z "$_zm" ] && [ -x "/data/adb/modules/zeromount/bin/zm" ] && _zm="found"
-        [ -z "$_zm" ] && [ -x "/data/adb/ksu/bin/zm" ] && _zm="found"
-        if [ -n "$_zm" ]; then
-            _mode="zeromount"
-            ui_print "  [✓] ZeroMount VFS available (best stealth)"
-        fi
+        _mode="zeromount"
+        ui_print "  [✓] ZeroMount VFS available"
     fi
 
     # Check overlayfs support
@@ -156,7 +150,7 @@ _detect_capabilities() {
         [ "$APATCH_BIND_MOUNT" = "true" ] && _has_magic="true"
     fi
 
-    # Report detected mode (if zeromount not already detected)
+    # Report detected mode (skip if zeromount already detected)
     if [ -z "$_mode" ]; then
         if [ "$_has_busybox" = "true" ]; then
             _mode="mountify"

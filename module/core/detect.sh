@@ -88,12 +88,7 @@ _test_xattr() {
 
 _probe_zeromount() {
     [ -e "/dev/zeromount" ] || return 1
-    command -v zm >/dev/null 2>&1 && return 0
-    local p
-    for p in /data/adb/modules/zeromount/bin/zm /data/adb/ksu/bin/zm /data/adb/magisk/zm /data/adb/ap/bin/zm; do
-        [ -x "$p" ] && return 0
-    done
-    return 1
+    return 0
 }
 
 _probe_mountify() {
