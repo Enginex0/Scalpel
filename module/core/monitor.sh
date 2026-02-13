@@ -169,10 +169,8 @@ _update_description() {
     # APatch fallback
     printf '%s' "$desc" > "${MODDIR}/override.description" 2>/dev/null
 
-    # Magisk reads module.prop directly
-    awk -v d="$desc" '{if(/^description=/){print "description=" d}else{print}}' "$prop_file" > "${prop_file}.tmp.$$" \
-        && mv "${prop_file}.tmp.$$" "$prop_file" \
-        || rm -f "${prop_file}.tmp.$$"
+    # Magisk reads module.prop directly — use # delimiter since desc contains |
+    sed -i "s#^description=.*#description=${desc}#" "$prop_file" 2>/dev/null
 }
 
 monitor_start() {
