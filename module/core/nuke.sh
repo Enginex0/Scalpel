@@ -69,13 +69,24 @@ nuke_restore() {
     local app_dir
     app_dir="$(dirname "$app_path")"
 
-    # Remove whiteout from module overlay
     whiteout_remove "$MODDIR" "$app_path"
     _prune_empty_parents "${MODDIR}${app_dir}" "$MODDIR"
 
-    # Re-register with package manager
-    pm install-existing "$pkg" >/dev/null 2>&1
-    pm enable "$pkg" >/dev/null 2>&1
+    # Re-enable: user 0 matches the disable-user scope from nuke
+    pm enable --user 0 "$pkg" 2>/dev/null \
+        || pm install-existing --user 0 "$pkg" 2>/dev/null \
+        || log_w "$_tag" "pm re-enable failed for $pkg"
+
+    # Tell ZeroMount to rescan so VFS rules reflect the removed whiteout
+    local _zm_bin=""
+    local _p
+    for _p in /data/adb/modules/meta-zeromount/zeromount /data/adb/modules/zeromount/zeromount; do
+        [ -x "$_p" ] && { _zm_bin="$_p"; break; }
+    done
+    if [ -n "$_zm_bin" ]; then
+        "$_zm_bin" module scan --cleanup scalpel 2>/dev/null
+        log_d "$_tag" "zeromount rescan triggered"
+    fi
 
     log_i "$_tag" "restored: $pkg"
     return 0
@@ -265,14 +276,17 @@ EOF
         whiteout_fix_vendor_symlinks "$MODDIR"
     fi
 
-    # Re-enable apps from app_list that are disabled but NOT being nuked
+    # Re-enable collateral: apps disabled by pre-debloat that aren't in nuke_list
     local _app_list="${SCALPEL_DATA}/app_list.json"
     if [ -f "$_app_list" ] && [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; then
+        local _nuked_set="${SCALPEL_DATA}/.nuked_set.$$"
+        "$jq_bin" -r '.[].package_name' "$NUKE_LIST" > "$_nuked_set" 2>/dev/null
+
         local _disabled_list _app_pkg
         _disabled_list=$(pm list packages -d 2>/dev/null)
         while read -r _app_pkg; do
             [ -z "$_app_pkg" ] && continue
-            "$jq_bin" -e --arg pkg "$_app_pkg" '.[] | select(.package_name == $pkg)' "$NUKE_LIST" >/dev/null 2>&1 && continue
+            grep -qxF "$_app_pkg" "$_nuked_set" && continue
             if echo "$_disabled_list" | grep -qx "package:$_app_pkg"; then
                 pm enable "$_app_pkg" >/dev/null 2>&1 || true
                 log_d "$_tag" "re-enabled: $_app_pkg"
@@ -280,6 +294,7 @@ EOF
         done <<EOF
 $("$jq_bin" -r '.[].package_name' "$_app_list" 2>/dev/null)
 EOF
+        rm -f "$_nuked_set"
     fi
 
     _write_status "$mode" "$success" "$failed" "$_timed_out"

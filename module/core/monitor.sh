@@ -8,31 +8,37 @@ NUKE_LIST="${SCALPEL_DATA}/nuke_list.json"
 STATUS_FILE="${SCALPEL_DATA}/status.json"
 SYSTEMIZE_LIST="${SCALPEL_DATA}/systemize_list.json"
 PID_FILE="${SCALPEL_DATA}/monitor.pid"
-NUKE_LOCK="${SCALPEL_DATA}/nuke.lock"
-LOCK_FILE="${SCALPEL_DATA}/monitor.lock"
+NUKE_LOCK_DIR="${SCALPEL_DATA}/nuke.lock.d"
 
 _cleanup() {
     rm -f "$PID_FILE"
 }
 
-# Stale PID check prevents ghost lock from orphaned processes
 _is_pid_alive() {
     [ -n "$1" ] && kill -0 "$1" 2>/dev/null
 }
 
+# mksh on Android doesn't support exec N>file for flock — use PID file instead
 _acquire_singleton() {
-    exec 9>"$LOCK_FILE"
-    if ! flock -n 9; then
-        return 1
+    if [ -f "$PID_FILE" ]; then
+        local old_pid
+        old_pid=$(cat "$PID_FILE" 2>/dev/null)
+        if _is_pid_alive "$old_pid"; then
+            return 1
+        fi
+        rm -f "$PID_FILE"
     fi
     echo "$$" > "$PID_FILE"
     return 0
 }
 
+# nuke.sh uses mkdir-based lock which works on all Android shells
 _is_nuke_running() {
-    [ ! -f "$NUKE_LOCK" ] && return 1
-    ( exec 8>"$NUKE_LOCK"; flock -n 8 ) 2>/dev/null && { rm -f "$NUKE_LOCK"; return 1; }
-    return 0
+    [ ! -d "$NUKE_LOCK_DIR" ] && return 1
+    local holder
+    holder=$(cat "${NUKE_LOCK_DIR}/pid" 2>/dev/null)
+    [ -n "$holder" ] && _is_pid_alive "$holder" && return 0
+    return 1
 }
 
 _jq() {
@@ -180,19 +186,13 @@ _update_description() {
         desc="😴 Idle — Ready to operate"
     fi
 
-    # KSU persistent description override (survives reboots, shown in manager)
-    local ksud_bin="/data/adb/ksud"
-    if [ "$KSU" = "true" ] && [ -x "$ksud_bin" ]; then
-        KSU_MODULE=scalpel "$ksud_bin" module config set override.description "$desc" 2>/dev/null
-    fi
-
-    # APatch fallback
-    printf '%s' "$desc" > "${MODDIR}/override.description" 2>/dev/null
-
-    # Magisk reads module.prop directly
     awk -v d="$desc" '{if(/^description=/){print "description=" d}else{print}}' "$prop_file" > "${prop_file}.tmp.$$" \
         && mv "${prop_file}.tmp.$$" "$prop_file" \
         || rm -f "${prop_file}.tmp.$$"
+
+    if [ "$KSU" = "true" ] && [ -x /data/adb/ksud ]; then
+        KSU_MODULE=scalpel /data/adb/ksud module config set override.description "$desc" 2>/dev/null
+    fi
 }
 
 monitor_start() {
