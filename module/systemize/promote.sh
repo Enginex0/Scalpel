@@ -154,17 +154,19 @@ demote_app() {
         '.[] | select(.package_name==$pkg)' "$SYSTEMIZE_LIST" 2>/dev/null)"
     [ -z "$entry_json" ] && { log_e "$_tag" "not in systemize list: $pkg"; return 1; }
 
-    local sys_path target
-    sys_path="$(echo "$entry_json" | _jq -r '.system_path // ""' 2>/dev/null)"
+    local target
     target="$(echo "$entry_json" | _jq -r '.target // "priv-app"' 2>/dev/null)"
 
-    local sys_dir
-    sys_dir="$(dirname "$sys_path")"
-    [ -d "$sys_dir" ] && rm -rf "$sys_dir"
-
-    # Only priv-app promotions have permissions XML
-    if [ "$target" = "priv-app" ]; then
-        rm -f "${MODDIR}/system/etc/permissions/privapp-permissions-${pkg}.xml" 2>/dev/null
+    # KSU locks module dirs at runtime — defer file deletion to post-fs-data
+    local pending="${SCALPEL_DATA}/pending_demote.json"
+    if [ -f "$pending" ]; then
+        local ptmp="${pending}.tmp.$$"
+        _jq --arg pkg "$pkg" --arg tgt "$target" \
+            '. + [{package_name: $pkg, target: $tgt}]' "$pending" > "$ptmp" 2>/dev/null \
+            && mv "$ptmp" "$pending" || rm -f "$ptmp"
+    else
+        _jq -n --arg pkg "$pkg" --arg tgt "$target" \
+            '[{package_name: $pkg, target: $tgt}]' > "$pending" 2>/dev/null
     fi
 
     local tmp="${SYSTEMIZE_LIST}.tmp.$$"
@@ -173,7 +175,7 @@ demote_app() {
     mv "$tmp" "$SYSTEMIZE_LIST" 2>/dev/null || rm -f "$tmp"
     pm install-existing "$pkg" 2>/dev/null
 
-    log_i "$_tag" "demoted: $pkg"
+    log_i "$_tag" "demoted: $pkg (pending cleanup on reboot)"
     return 0
 }
 
@@ -193,14 +195,8 @@ list_promoted() {
 verify_promotion() {
     local pkg="$1"
     [ -z "$pkg" ] && return 1
-    local dump
-    dump="$(dumpsys package "$pkg" 2>/dev/null)"
-    [ -z "$dump" ] && return 1
-    # FLAG_SYSTEM + sourceDir must both point to /system
-    echo "$dump" | grep -q 'SYSTEM' || return 1
-    local source_dir
-    source_dir="$(echo "$dump" | grep 'sourceDir=' | head -1 | sed 's/.*sourceDir=//')"
-    case "$source_dir" in /system/*) return 0 ;; *) return 1 ;; esac
+    # UPDATED_SYSTEM_APP has FLAG_SYSTEM but sourceDir still points to /data/app/
+    pm list packages -s 2>/dev/null | grep -qx "package:${pkg}"
 }
 
 # Only execute when run directly

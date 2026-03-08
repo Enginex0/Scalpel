@@ -119,29 +119,40 @@ _verify_systemized_apps() {
 
     log_i "$_tag" "verifying $count systemized app(s)"
 
-    local verified=0 failed=0
-    local pkg
+    local verified=0 failed=0 uninstalled=0
+    local entry pkg needs_uninstall
+    local sys_pkgs
+    sys_pkgs="$(pm list packages -s 2>/dev/null)"
 
-    while read -r pkg; do
+    while IFS='|' read -r pkg needs_uninstall; do
         [ -z "$pkg" ] && continue
 
-        local pm_output
-        pm_output="$(pm path "$pkg" 2>/dev/null)"
-        case "$pm_output" in
-            *"/system/"*)
-                log_i "$_tag" "VERIFIED: $pkg has FLAG_SYSTEM"
-                verified=$((verified + 1))
-                ;;
-            *)
-                log_w "$_tag" "PENDING: $pkg not yet system (reboot may be needed)"
-                failed=$((failed + 1))
-                ;;
-        esac
+        if echo "$sys_pkgs" | grep -qx "package:${pkg}"; then
+            log_i "$_tag" "VERIFIED: $pkg has FLAG_SYSTEM"
+            verified=$((verified + 1))
+            if [ "$needs_uninstall" = "true" ]; then
+                if pm uninstall -k --user 0 "$pkg" >/dev/null 2>&1; then
+                    log_i "$_tag" "deferred uninstall: $pkg"
+                    uninstalled=$((uninstalled + 1))
+                fi
+            fi
+        else
+            log_w "$_tag" "PENDING: $pkg not yet system (reboot may be needed)"
+            failed=$((failed + 1))
+        fi
     done <<EOF
-$("$jq_bin" -r '.[].package_name' "$sys_list" 2>/dev/null)
+$("$jq_bin" -r '.[] | "\(.package_name)|\(.needs_uninstall // false)"' "$sys_list" 2>/dev/null)
 EOF
 
-    log_i "$_tag" "systemize verification: $verified OK, $failed pending"
+    if [ "$uninstalled" -gt 0 ]; then
+        local tmp="${sys_list}.tmp.$$"
+        "$jq_bin" '[.[] | .needs_uninstall = false]' "$sys_list" > "$tmp" 2>/dev/null \
+            && mv "$tmp" "$sys_list" \
+            || rm -f "$tmp"
+        log_i "$_tag" "deferred uninstall: cleared $uninstalled flags"
+    fi
+
+    log_i "$_tag" "systemize verification: $verified OK, $failed pending, $uninstalled uninstalled"
 }
 
 _finish_deferred_debloat() {

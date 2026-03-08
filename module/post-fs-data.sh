@@ -21,7 +21,22 @@ SCALPEL_DATA="/data/adb/scalpel"
 TAG="post-fs-data"
 log_i "$TAG" "scalpel starting (boot)"
 
-# Debloat engine -- sources detect.sh + mode scripts internally
+# Process deferred demotions before KSU locks module dirs
+_pending="${SCALPEL_DATA}/pending_demote.json"
+if [ -f "$_pending" ]; then
+    _jq_bin="${MODDIR}/bin/jq"
+    [ ! -x "$_jq_bin" ] && _jq_bin="jq"
+    while IFS='|' read -r _pkg _tgt; do
+        [ -z "$_pkg" ] && continue
+        rm -rf "${MODDIR}/system/${_tgt}/${_pkg}"
+        [ "$_tgt" = "priv-app" ] && rm -f "${MODDIR}/system/etc/permissions/privapp-permissions-${_pkg}.xml"
+        log_i "$TAG" "cleaned demoted app: $_pkg"
+    done <<DEMOTE_EOF
+$("$_jq_bin" -r '.[] | "\(.package_name)|\(.target // "priv-app")"' "$_pending" 2>/dev/null)
+DEMOTE_EOF
+    rm -f "$_pending"
+fi
+
 . "${MODDIR}/core/nuke.sh"
 nuke_run || log_w "post-fs-data" "nuke completed with failures"
 
