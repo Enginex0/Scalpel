@@ -120,61 +120,28 @@ _verify_systemized_apps() {
     log_i "$_tag" "verifying $count systemized app(s)"
 
     local verified=0 failed=0
-    local pkg sys_path needs_uninstall overlay_path pm_output
+    local pkg
 
-    while IFS='	' read -r pkg sys_path needs_uninstall; do
+    while read -r pkg; do
         [ -z "$pkg" ] && continue
-        [ -z "$sys_path" ] && continue
 
-        overlay_path="/system/${sys_path#*/system/}"
-
-        local file_ok="false" pm_ok="false"
-
-        if [ -f "$overlay_path" ] && [ -r "$overlay_path" ]; then
-            file_ok="true"
-        fi
-
+        local pm_output
         pm_output="$(pm path "$pkg" 2>/dev/null)"
         case "$pm_output" in
-            *"/system/"*) pm_ok="true" ;;
+            *"/system/"*)
+                log_i "$_tag" "VERIFIED: $pkg has FLAG_SYSTEM"
+                verified=$((verified + 1))
+                ;;
+            *)
+                log_w "$_tag" "PENDING: $pkg not yet system (reboot may be needed)"
+                failed=$((failed + 1))
+                ;;
         esac
-
-        # VFS file access is the source of truth — pm path reflects PMS database which won't
-        # update until after uninstall + reboot. Trust file_ok alone for uninstall decision.
-        if [ "$file_ok" = "true" ]; then
-            log_i "$_tag" "VERIFIED: $pkg VFS accessible at $overlay_path"
-            verified=$((verified + 1))
-
-            # VFS working — safe to remove /data/app copy. PMS will discover /system/ on next boot.
-            if [ "$needs_uninstall" = "true" ]; then
-                if pm uninstall -k --user 0 "$pkg" >/dev/null 2>&1; then
-                    log_i "$_tag" "deferred uninstall completed: $pkg (reboot for PMS to pick up /system/)"
-                    local tmp="${sys_list}.tmp.$$"
-                    "$jq_bin" --arg p "$pkg" \
-                        '[.[] | if .package_name == $p then .needs_uninstall = false else . end]' \
-                        "$sys_list" > "$tmp" 2>/dev/null \
-                        && mv "$tmp" "$sys_list" 2>/dev/null \
-                        || rm -f "$tmp"
-                else
-                    log_w "$_tag" "deferred uninstall failed: $pkg (will retry next boot)"
-                fi
-            fi
-        else
-            # VFS not working — do NOT uninstall or app disappears entirely
-            log_w "$_tag" "FAILED: $pkg NOT accessible at $overlay_path"
-            if [ "$needs_uninstall" = "true" ]; then
-                log_w "$_tag" "$pkg VFS not active — skipping uninstall, app preserved at /data/app"
-            fi
-            failed=$((failed + 1))
-        fi
     done <<EOF
-$("$jq_bin" -r '.[] | "\(.package_name)\t\(.system_path)\t\(.needs_uninstall // false)"' "$sys_list" 2>/dev/null)
+$("$jq_bin" -r '.[].package_name' "$sys_list" 2>/dev/null)
 EOF
 
-    if [ "$failed" -gt 0 ]; then
-        log_w "$_tag" "$failed systemized app(s) not visible — overlay may not be active or metamodule missing"
-    fi
-    log_i "$_tag" "systemize verification: $verified OK, $failed FAILED"
+    log_i "$_tag" "systemize verification: $verified OK, $failed pending"
 }
 
 _finish_deferred_debloat() {
@@ -258,6 +225,9 @@ post_boot_run() {
     verify_run || log_w "$_tag" "verification found issues"
 
     _verify_systemized_apps
+
+    # Stale PID from previous boot can block new monitor if PID gets reused
+    rm -f "${SCALPEL_DATA}/monitor.pid" 2>/dev/null
 
     log_d "$_tag" "starting supervised monitor daemon"
     nohup sh "${MODDIR}/core/monitor.sh" > /dev/null 2>&1 &

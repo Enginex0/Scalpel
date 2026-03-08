@@ -56,12 +56,9 @@ promote_app() {
         *) log_e "$_tag" "not a user app: $pkg ($first_path)"; return 1 ;;
     esac
 
-    # Directory name must be a valid filesystem path (no spaces/special chars)
-    local app_name
-    app_name="$(basename "$app_dir" | sed 's/-[a-zA-Z0-9_=]*$//')"
-    [ -z "$app_name" ] || [ "$app_name" = "." ] && app_name="${pkg##*.}"
+    # TS uses package name as directory name — PMS expects clean names
+    local app_name="$pkg"
 
-    # Human-readable label for JSON record (WebUI display)
     local display_name
     if [ -n "$app_label" ]; then
         display_name="$app_label"
@@ -85,14 +82,16 @@ promote_app() {
     # Native libs needed for JNI apps
     [ -d "${app_dir}/lib" ] && cp -r "${app_dir}/lib" "$target_dir/" 2>/dev/null
 
-    # 5: Permissions — dirs 0755, files 0644
+    # 5: Permissions — parent dirs must be 0755 for system_server (UID 1000) traversal
+    chmod 0755 "${MODDIR}/system" "${MODDIR}/system/${target}" 2>/dev/null
     chmod 0755 "$target_dir"
     for f in "$target_dir"/*.apk; do
         [ -f "$f" ] && chmod 0644 "$f"
     done
     [ -d "${target_dir}/lib" ] && chmod -R 0755 "${target_dir}/lib" 2>/dev/null
 
-    # 6: SELinux context
+    # 6: SELinux context — parent dirs included
+    chcon 'u:object_r:system_file:s0' "${MODDIR}/system" "${MODDIR}/system/${target}" 2>/dev/null
     chcon -R 'u:object_r:system_file:s0' "$target_dir" 2>/dev/null
 
     # 7: Priv-app permissions XML -- only needed for priv-app (Android 9+ requirement)
@@ -106,7 +105,6 @@ promote_app() {
         fi
     fi
 
-    # 8: Record operation — pm uninstall deferred to post_boot after overlay is verified
     _record_promotion "$pkg" "$display_name" "$first_path" "$target_dir" "$target"
 
     log_i "$_tag" "promoted: $pkg ($copied APKs) -> $target_dir"
@@ -127,14 +125,14 @@ _record_promotion() {
         _jq --arg pkg "$pkg" --arg name "$app_name" \
             --arg orig "$orig_path" --arg sys "$sys_path" \
             --arg date "$iso_date" --arg tgt "$target" \
-            '[.[] | select(.package_name != $pkg)] + [{"app_name":$name,"package_name":$pkg,"original_path":$orig,"system_path":$sys,"promoted_date":$date,"target":$tgt,"needs_uninstall":true}]' \
+            '[.[] | select(.package_name != $pkg)] + [{"app_name":$name,"package_name":$pkg,"original_path":$orig,"system_path":$sys,"promoted_date":$date,"target":$tgt,"needs_uninstall":false}]' \
             "$SYSTEMIZE_LIST" > "$tmp" 2>/dev/null
     else
         mkdir -p "$SCALPEL_DATA" 2>/dev/null
         _jq -n --arg pkg "$pkg" --arg name "$app_name" \
             --arg orig "$orig_path" --arg sys "$sys_path" \
             --arg date "$iso_date" --arg tgt "$target" \
-            '[{"app_name":$name,"package_name":$pkg,"original_path":$orig,"system_path":$sys,"promoted_date":$date,"target":$tgt,"needs_uninstall":true}]' \
+            '[{"app_name":$name,"package_name":$pkg,"original_path":$orig,"system_path":$sys,"promoted_date":$date,"target":$tgt,"needs_uninstall":false}]' \
             > "$tmp" 2>/dev/null
     fi
 

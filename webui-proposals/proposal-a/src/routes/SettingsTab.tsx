@@ -56,9 +56,10 @@ export function SettingsTab() {
     const notFound = packages.length - matchedPackages.length - alreadyNuked.length;
 
     if (matchedPackages.length > 0) {
+      store.setDebloatSelected(new Set(matchedPackages));
       store.setActiveTab('debloat');
       store.showToast(
-        `${matchedPackages.length} found${notFound > 0 ? `, ${notFound} not on device` : ''}${alreadyNuked.length > 0 ? `, ${alreadyNuked.length} already nuked` : ''}`,
+        `${matchedPackages.length} selected${notFound > 0 ? `, ${notFound} not on device` : ''}${alreadyNuked.length > 0 ? `, ${alreadyNuked.length} already nuked` : ''}`,
         'info'
       );
     } else if (alreadyNuked.length > 0) {

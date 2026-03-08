@@ -31,7 +31,7 @@ export function App() {
         <Show when={store.activeTab() === 'status' || store.activeTab() === 'settings'}>
           <Header />
         </Show>
-        <main style={`padding-bottom:${store.settings.fixedNav ? 'calc(100px + 48px + max(48px, env(safe-area-inset-bottom, 0px)))' : 'calc(100px + max(48px, env(safe-area-inset-bottom, 0px)))'};`}>
+        <main style={`padding-bottom:${store.settings.fixedNav ? 'calc(160px + 48px + max(48px, env(safe-area-inset-bottom, 0px)))' : 'calc(160px + max(48px, env(safe-area-inset-bottom, 0px)))'};`}>
           <Switch>
             <Match when={store.activeTab() === 'debloat'}><DebloatTab /></Match>
             <Match when={store.activeTab() === 'systemize'}><SystemizeTab /></Match>

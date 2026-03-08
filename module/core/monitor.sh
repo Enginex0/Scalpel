@@ -190,7 +190,7 @@ _update_description() {
         && mv "${prop_file}.tmp.$$" "$prop_file" \
         || rm -f "${prop_file}.tmp.$$"
 
-    if [ "$KSU" = "true" ] && [ -x /data/adb/ksud ]; then
+    if [ -x /data/adb/ksud ]; then
         KSU_MODULE=scalpel /data/adb/ksud module config set override.description "$desc" 2>/dev/null
     fi
 }

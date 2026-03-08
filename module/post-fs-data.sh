@@ -17,6 +17,7 @@ config_init 2>/dev/null || echo "scalpel[post-fs-data]: config_init failed (cont
 . "${MODDIR}/core/logging.sh"
 log_init
 
+SCALPEL_DATA="/data/adb/scalpel"
 TAG="post-fs-data"
 log_i "$TAG" "scalpel starting (boot)"
 

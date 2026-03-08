@@ -4,7 +4,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background: var(--glass-bg);
+  background: rgba(0, 0, 0, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid var(--glass-border);

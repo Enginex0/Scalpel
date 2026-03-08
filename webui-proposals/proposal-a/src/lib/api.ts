@@ -307,6 +307,7 @@ export const api = {
       return false;
     }
     log.info('api', `promoteApp: ${pkg} promoted`);
+    syncDescription();
     return true;
   },
 
@@ -322,6 +323,7 @@ export const api = {
       return false;
     }
     log.info('api', `demoteApp: ${pkg} demoted`);
+    syncDescription();
     return true;
   },
 

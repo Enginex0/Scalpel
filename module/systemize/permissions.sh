@@ -15,6 +15,8 @@ generate_permissions() {
 
     local target_dir="${MODDIR}/system/etc/permissions"
     mkdir -p "$target_dir" || { log_e "$_tag" "cannot create $target_dir"; return 1; }
+    chmod 0755 "${MODDIR}/system/etc" "${target_dir}" 2>/dev/null
+    chcon 'u:object_r:system_file:s0' "${MODDIR}/system/etc" "${target_dir}" 2>/dev/null
 
     local xml_file="${target_dir}/privapp-permissions-${pkg}.xml"
 
