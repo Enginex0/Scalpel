@@ -19,9 +19,9 @@ export const APP_VERSION = '0.1.0';
 export const MODULE_ID = 'scalpel';
 
 export const MODES: ModeInfo[] = [
+  { id: 'auto', name: 'Auto', description: 'Auto-detect best available mode at boot' },
   { id: 'overlay', name: 'Overlay', description: 'Standard overlayfs whiteouts — metamodule handles mounting' },
   { id: 'pm', name: 'PM Disable', description: 'pm disable-user — universal fallback, no filesystem changes' },
-  { id: 'none', name: 'Ready', description: 'No apps debloated yet' },
 ];
 
 // FOUNDATION.md 10.1 -- exact category colors from categories.json

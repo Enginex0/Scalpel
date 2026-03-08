@@ -422,13 +422,18 @@ a { color: var(--text-accent); text-decoration: none; }
   justify-content: space-between;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  margin-top: 16px;
+  margin-top: 8px;
   margin-bottom: 4px;
-  padding: 8px 0;
+  padding: 10px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .section-header:active {
-  opacity: 0.7;
+  background: rgba(var(--accent-rgb), 0.08);
+  border-color: rgba(var(--accent-rgb), 0.2);
 }
 
 .section-label {

@@ -1,4 +1,4 @@
-import { createSignal, For } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { store } from '../lib/store';
 import { api } from '../lib/api';
 import { Card } from '../components/core/Card';
@@ -8,9 +8,7 @@ import { ImportModal } from '../components/layout/ImportModal';
 import { accentPresets, accentNames } from '../lib/theme';
 import { MODES, MODULE_ID, APP_VERSION } from '../lib/constants';
 import { ICONS } from '../lib/icons';
-import type { ModeOverride, LogLevel, ThemeMode } from '../lib/types';
-
-const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error', 'fatal'];
+import type { ModeOverride, ThemeMode } from '../lib/types';
 const MONITOR_STEPS = [60, 120, 300, 600, 900, 1800, 3600];
 
 function closestStepIndex(value: number): number {
@@ -23,16 +21,11 @@ function closestStepIndex(value: number): number {
   return best;
 }
 
-const dropdownArrowUrl = () => {
-  const isLight = store.settings.theme === 'light';
-  const fillColor = isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)';
-  return `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='${encodeURIComponent(fillColor)}'%3E%3Cpath d='M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z'/%3E%3C/svg%3E")`;
-};
-
 export function SettingsTab() {
   const accentColors = Object.keys(accentPresets);
   const [importModalOpen, setImportModalOpen] = createSignal(false);
   const [exporting, setExporting] = createSignal(false);
+  const [accentExpanded, setAccentExpanded] = createSignal(false);
 
   const handleExport = async () => {
     setExporting(true);
@@ -75,15 +68,6 @@ export function SettingsTab() {
     }
   };
 
-  const selectStyle = () => `
-    width:100%;padding:10px 12px;border-radius:8px;
-    background:var(--bg-surface-elevated);border:1px solid var(--glass-border);
-    color:var(--text-primary);font-size:14px;
-    appearance:none;
-    background-image:${dropdownArrowUrl()};
-    background-repeat:no-repeat;background-position:right 8px center;background-size:20px;
-  `;
-
   return (
     <div style="padding:0 16px;display:flex;flex-direction:column;gap:16px;">
       {/* Debloat Engine */}
@@ -94,27 +78,28 @@ export function SettingsTab() {
         <Card variant="glass" padding="medium">
           <div style="display:flex;flex-direction:column;gap:16px;">
             <div>
-              <div style="font-size:13px;font-weight:500;margin-bottom:6px;">Mode Override</div>
-              <select
-                value={store.settings.modeOverride}
-                onChange={(e) => store.updateSettings({ modeOverride: e.currentTarget.value as ModeOverride })}
-                style={selectStyle()}
-              >
+              <div style="font-size:13px;font-weight:500;margin-bottom:8px;">Mode Override</div>
+              <div style="display:flex;gap:8px;">
                 <For each={MODES}>
-                  {(mode) => <option value={mode.id}>{mode.name}</option>}
+                  {(mode) => (
+                    <button
+                      onClick={() => store.updateSettings({ modeOverride: mode.id as ModeOverride })}
+                      style={`
+                        flex:1;padding:10px 8px;border-radius:10px;
+                        border:2px solid ${store.settings.modeOverride === mode.id ? 'rgba(var(--accent-rgb), 0.6)' : 'var(--glass-border)'};
+                        background:${store.settings.modeOverride === mode.id ? 'rgba(var(--accent-rgb), 0.1)' : 'var(--bg-surface)'};
+                        color:var(--text-primary);font-size:11px;font-weight:600;
+                        transition:all 0.2s var(--ease-spring);cursor:pointer;
+                      `}
+                    >
+                      {mode.name}
+                    </button>
+                  )}
                 </For>
-              </select>
-              <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">
+              </div>
+              <div style="font-size:11px;color:var(--text-tertiary);margin-top:6px;">
                 {MODES.find(m => m.id === store.settings.modeOverride)?.description}
               </div>
-            </div>
-
-            <div style="display:flex;align-items:center;justify-content:space-between;">
-              <div>
-                <div style="font-size:13px;font-weight:500;">Disable Only</div>
-                <div style="font-size:11px;color:var(--text-tertiary);">Use pm disable instead of removal</div>
-              </div>
-              <Toggle checked={store.settings.disableOnly} onChange={(v) => store.updateSettings({ disableOnly: v })} />
             </div>
 
             <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -132,6 +117,32 @@ export function SettingsTab() {
               </div>
               <Toggle checked={store.settings.fixedNav} onChange={(v) => store.updateSettings({ fixedNav: v })} />
             </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Diagnostics */}
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">
+          Diagnostics
+        </div>
+        <Card variant="glass" padding="medium">
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:13px;font-weight:500;">Verbose Logging</div>
+                <div style="font-size:11px;color:var(--text-tertiary);">
+                  {store.verboseMode() ? 'Active — takes effect next boot' : 'Extreme debug logging'}
+                </div>
+              </div>
+              <div style="flex-shrink:0;">
+                <Toggle checked={store.verboseMode()} onChange={() => store.toggleVerboseMode()} />
+              </div>
+            </div>
+
+            <Button variant="secondary" size="small" fullWidth onClick={() => store.dumpDiagnostics()}>
+              Save to Download
+            </Button>
           </div>
         </Card>
       </div>
@@ -206,9 +217,34 @@ export function SettingsTab() {
             </div>
 
             <div>
-              <div style="font-size:13px;font-weight:500;margin-bottom:8px;">Accent Color</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <span style="font-size:13px;font-weight:500;">Accent Color</span>
+                <Show when={!accentExpanded() && accentColors.length > 3}>
+                  <div
+                    onClick={() => setAccentExpanded(true)}
+                    style="display:flex;align-items:center;gap:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;"
+                  >
+                    <span style="padding:2px 8px;background:rgba(var(--accent-rgb),0.15);border-radius:10px;font-size:11px;font-weight:600;color:var(--text-accent);">
+                      {accentColors.length - 3} more
+                    </span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text-accent);">
+                      <path d="M7 10l5 5 5-5z" />
+                    </svg>
+                  </div>
+                </Show>
+                <Show when={accentExpanded()}>
+                  <div
+                    onClick={() => setAccentExpanded(false)}
+                    style="display:flex;align-items:center;gap:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text-accent);transform:rotate(180deg);">
+                      <path d="M7 10l5 5 5-5z" />
+                    </svg>
+                  </div>
+                </Show>
+              </div>
               <div style="display:flex;flex-direction:column;gap:8px;">
-                <For each={accentColors}>
+                <For each={accentExpanded() ? accentColors : accentColors.slice(0, 3)}>
                   {(color) => {
                     const preset = accentPresets[color];
                     const name = accentNames[color] || color;
@@ -253,25 +289,6 @@ export function SettingsTab() {
               <Toggle checked={store.settings.autoAccentColor} onChange={(v) => store.updateSettings({ autoAccentColor: v })} />
             </div>
           </div>
-        </Card>
-      </div>
-
-      {/* Logging */}
-      <div>
-        <div style="font-size:12px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">
-          Logging
-        </div>
-        <Card variant="glass" padding="medium">
-          <div style="font-size:13px;font-weight:500;margin-bottom:6px;">Log Level</div>
-          <select
-            value={store.settings.logLevel}
-            onChange={(e) => store.updateSettings({ logLevel: e.currentTarget.value as LogLevel })}
-            style={selectStyle()}
-          >
-            <For each={LOG_LEVELS}>
-              {(level) => <option value={level}>{level.toUpperCase()}</option>}
-            </For>
-          </select>
         </Card>
       </div>
 

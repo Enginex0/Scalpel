@@ -36,6 +36,29 @@ async function getMock() {
   return import('./api.mock');
 }
 
+async function syncDescription(): Promise<void> {
+  const jq = `${PATHS.MODULE_DIR}/bin/jq`;
+  const prop = `${PATHS.MODULE_DIR}/module.prop`;
+  const cmd = `
+    jq="${jq}"; [ ! -x "$jq" ] && jq=jq
+    d=$("$jq" 'length' ${PATHS.NUKE_LIST} 2>/dev/null || echo 0)
+    s=$("$jq" 'length' ${PATHS.SYSTEMIZE_LIST} 2>/dev/null || echo 0)
+    m=$("$jq" -r '.mode // "none"' ${PATHS.STATUS} 2>/dev/null || echo none)
+    desc="😴 Idle — Ready to operate"
+    if [ "$d" -gt 0 ] 2>/dev/null || [ "$s" -gt 0 ] 2>/dev/null; then
+      desc="⚕️ Active"
+      [ "$d" -gt 0 ] 2>/dev/null && desc="$desc | $d Debloated"
+      [ "$s" -gt 0 ] 2>/dev/null && desc="$desc | $s Systemized"
+      [ "$m" != "none" ] && desc="$desc | $m"
+    fi
+    awk -v d="$desc" '{if(/^description=/){print "description=" d}else{print}}' ${prop} > ${prop}.tmp.$$ \
+      && mv ${prop}.tmp.$$ ${prop} \
+      || rm -f ${prop}.tmp.$$
+    KSU_MODULE=scalpel /data/adb/ksud module config set override.description "$desc" 2>/dev/null
+  `;
+  await ksuExec(cmd);
+}
+
 export const api = {
   async getScannedApps(): Promise<ScannedApp[]> {
     if (shouldUseMock()) return (await getMock()).MOCK_SCANNED;
@@ -162,10 +185,10 @@ export const api = {
     }
   },
 
-  async getLogLines(): Promise<string[]> {
+  async getLogLines(lines = 50): Promise<string[]> {
     if (shouldUseMock()) return [...(await getMock()).MOCK_LOG_LINES];
     try {
-      const { errno, stdout, stderr } = await ksuExec(`tail -50 ${escapeShellArg(PATHS.DEBUG_LOG)}`);
+      const { errno, stdout, stderr } = await ksuExec(`tail -${lines} ${escapeShellArg(PATHS.DEBUG_LOG)}`);
       if (errno !== 0) {
         log.debug('api', 'getLogLines: log file not found', stderr);
         return [];
@@ -175,6 +198,30 @@ export const api = {
       log.warn('api', 'getLogLines failed', String(e));
       return [];
     }
+  },
+
+  async runDiagnostics(): Promise<string[]> {
+    if (shouldUseMock()) return [...(await getMock()).MOCK_LOG_LINES];
+    const { errno, stdout } = await ksuExec(`sh ${PATHS.MODULE_DIR}/core/diagnostics.sh dump`, 30000);
+    if (errno !== 0) return [];
+    return stdout.split('\n');
+  },
+
+  async clearLog(): Promise<boolean> {
+    if (shouldUseMock()) return true;
+    const { errno } = await ksuExec(`> ${escapeShellArg(PATHS.DEBUG_LOG)}`);
+    return errno === 0;
+  },
+
+  async saveDiagToDownload(): Promise<{ success: boolean; filename?: string }> {
+    if (shouldUseMock()) return { success: true, filename: 'scalpel_diag.log' };
+    const date = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+    const filename = `scalpel_diag_${date}.log`;
+    const dest = `${PATHS.DOWNLOAD_DIR}/${filename}`;
+    const { errno } = await ksuExec(`sh ${PATHS.MODULE_DIR}/core/diagnostics.sh dump > ${escapeShellArg(dest)}`, 30000);
+    if (errno !== 0) return { success: false };
+    log.info('api', `saveDiagToDownload: saved to ${filename}`);
+    return { success: true, filename };
   },
 
   async nukeApps(entries: DebloatedApp[]): Promise<{ success: string[]; failed: string[] }> {
@@ -204,6 +251,7 @@ export const api = {
       return { success: [], failed: entries.map(e => e.package_name) };
     }
     log.info('api', `nukeApps: completed successfully`);
+    syncDescription();
     return { success: entries.map(e => e.package_name), failed: [] };
   },
 
@@ -229,6 +277,7 @@ export const api = {
       return false;
     }
     log.info('api', `restoreApp: ${pkg} restored`);
+    syncDescription();
     return true;
   },
 

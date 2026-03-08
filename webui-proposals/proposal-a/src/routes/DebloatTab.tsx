@@ -26,8 +26,9 @@ export function DebloatTab() {
   const setSelected = store.setDebloatSelected;
   const [restoreConfirmPkg, setRestoreConfirmPkg] = createSignal<string | null>(null);
   const [detailApp, setDetailApp] = createSignal<ScannedApp | null>(null);
-  const [nukedOpen, setNukedOpen] = createSignal(true);
+  const [nukedOpen, setNukedOpen] = createSignal(false);
   const [scanning, setScanning] = createSignal(false);
+  const [restoreSelected, setRestoreSelected] = createSignal<Set<string>>(new Set());
 
   const [openSections, setOpenSections] = createSignal<Set<SectionId>>(new Set(['safe']));
 
@@ -86,9 +87,21 @@ export function DebloatTab() {
     setSelected(s);
   };
 
+  const toggleRestoreSelect = (pkg: string) => {
+    const s = new Set(restoreSelected());
+    if (s.has(pkg)) s.delete(pkg); else s.add(pkg);
+    setRestoreSelected(s);
+  };
+
   const handleRestore = async (pkg: string) => {
     setRestoreConfirmPkg(null);
     await store.restoreApp(pkg);
+  };
+
+  const handleBatchRestore = async () => {
+    const pkgs = [...restoreSelected()];
+    setRestoreSelected(new Set<string>());
+    for (const pkg of pkgs) await store.restoreApp(pkg);
   };
 
   const handleRefresh = async () => {
@@ -101,7 +114,7 @@ export function DebloatTab() {
   };
 
   return (
-    <div style="padding:0 16px;padding-top:48px;">
+    <div style={`padding:0 16px;padding-top:48px;padding-bottom:${selected().size > 0 || restoreSelected().size > 0 ? '140' : '80'}px;`}>
       {/* Search + refresh */}
       <div style="display:flex;gap:8px;margin-bottom:8px;padding-top:16px;">
         <div style="position:relative;flex:1;">
@@ -153,42 +166,78 @@ export function DebloatTab() {
           <span class="section-label">Debloated</span>
           <div class="section-meta">
             <span class="section-count">{filteredNukedApps().length}</span>
-            <Show when={filteredNukedApps().length > 1}>
-              <button
-                class="section-action"
-                onClick={(e: MouseEvent) => { e.stopPropagation(); store.restoreAllNuked(); }}
-              >
-                Restore All
-              </button>
-            </Show>
             <svg class={`section-chevron${nukedOpen() ? ' section-chevron--open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
               <path d={ICONS.chevronDown} />
             </svg>
           </div>
         </div>
+
+        {/* Collapsed: last debloated app preview */}
+        <Show when={!nukedOpen()}>
+          {(() => {
+            const last = filteredNukedApps()[filteredNukedApps().length - 1];
+            return (
+              <Card variant="glass" padding="small" style="border-left:2px solid var(--color-success);margin-bottom:16px;cursor:pointer;"
+                onClick={() => setRestoreConfirmPkg(last.package_name)}>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                  <AppIcon packageName={last.package_name} source="ksu" size={36} />
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:14px;font-weight:500;text-decoration:line-through;opacity:0.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                      <span ref={(el) => setupTextScroll(el)}>{last.app_name}</span>
+                    </div>
+                    <div style="font-size:11px;color:var(--text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                      <span ref={(el) => setupTextScroll(el)}>{last.package_name}</span>
+                    </div>
+                  </div>
+                  <Button size="small" variant="ghost" onClick={(e: MouseEvent) => { e.stopPropagation(); setRestoreConfirmPkg(last.package_name); }}>Restore</Button>
+                </div>
+              </Card>
+            );
+          })()}
+        </Show>
+
+        {/* Expanded: full list with Restore All */}
         <Show when={nukedOpen()}>
+          <Show when={filteredNukedApps().length > 1}>
+            <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+              <button
+                class="section-action"
+                onClick={() => store.restoreAllNuked()}
+              >
+                Restore All
+              </button>
+            </div>
+          </Show>
           <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
             <For each={filteredNukedApps()}>
-              {(app, i) => (
-                <Card variant="glass" padding="small" style={`animation:slideInRight 0.2s var(--ease-out) ${i() * 40}ms both;border-left:2px solid ${app.pending ? '#ff9800' : 'var(--color-success)'};cursor:pointer;`}
-                  onClick={() => setRestoreConfirmPkg(app.package_name)}>
-                  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              {(app, i) => {
+                const isMarked = () => restoreSelected().has(app.package_name);
+                return (
+                  <div
+                    onClick={() => toggleRestoreSelect(app.package_name)}
+                    style={`
+                      display:flex;align-items:center;gap:10px;padding:10px 12px;
+                      background:${isMarked() ? 'rgba(76,175,80,0.10)' : 'var(--bg-surface)'};
+                      border:1px solid ${isMarked() ? 'rgba(76,175,80,0.4)' : 'var(--glass-border)'};
+                      border-left:3px solid ${isMarked() ? '#4caf50' : 'var(--color-success)'};
+                      border-radius:12px;cursor:pointer;
+                      transition:all 0.2s var(--ease-spring);
+                      animation:slideInRight 0.2s var(--ease-out) ${i() * 40}ms both;
+                    `}
+                  >
                     <AppIcon packageName={app.package_name} source="ksu" size={36} />
                     <div style="flex:1;min-width:0;">
-                      <div style={`font-size:14px;font-weight:500;${app.pending ? 'opacity:0.7;' : 'text-decoration:line-through;opacity:0.5;'}white-space:nowrap;overflow:hidden;text-overflow:ellipsis;`}>
+                      <div style="font-size:14px;font-weight:500;text-decoration:line-through;opacity:0.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                         <span ref={(el) => setupTextScroll(el)}>{app.app_name}</span>
                       </div>
                       <div style="font-size:11px;color:var(--text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                         <span ref={(el) => setupTextScroll(el)}>{app.package_name}</span>
                       </div>
-                      <Show when={app.pending}>
-                        <div style="font-size:10px;color:#ff9800;font-weight:600;margin-top:2px;">awaiting reboot</div>
-                      </Show>
                     </div>
                     <Button size="small" variant="ghost" onClick={(e: MouseEvent) => { e.stopPropagation(); setRestoreConfirmPkg(app.package_name); }}>Restore</Button>
                   </div>
-                </Card>
-              )}
+                );
+              }}
             </For>
           </div>
         </Show>
@@ -298,15 +347,44 @@ export function DebloatTab() {
         </div>
       </Show>
 
-      {/* Batch action bar */}
-      <Show when={selected().size > 0}>
+      {/* Batch restore bar */}
+      <Show when={restoreSelected().size > 0}>
+        <div style={`
+          position:fixed;bottom:calc(68px + env(safe-area-inset-bottom));left:16px;right:76px;
+          padding:12px 16px;border-radius:16px;
+          background:var(--bg-surface-elevated);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+          border:1px solid rgba(76,175,80,0.3);
+          display:flex;align-items:center;justify-content:space-between;
+          z-index:110;
+          animation:slideInUp 0.3s var(--ease-spring);
+        `}>
+          <span style="font-size:14px;font-weight:600;color:#4caf50;">{restoreSelected().size} to restore</span>
+          <div style="display:flex;gap:8px;">
+            <button
+              onClick={() => setRestoreSelected(new Set<string>())}
+              style="padding:4px 10px;border-radius:8px;font-size:12px;color:var(--text-tertiary);background:var(--bg-surface);border:1px solid var(--glass-border);"
+            >
+              Clear
+            </button>
+            <button
+              onClick={handleBatchRestore}
+              style="padding:4px 12px;border-radius:8px;font-size:12px;font-weight:600;color:#fff;background:#4caf50;border:none;"
+            >
+              Restore
+            </button>
+          </div>
+        </div>
+      </Show>
+
+      {/* Batch debloat bar */}
+      <Show when={selected().size > 0 && restoreSelected().size === 0}>
         <div style={`
           position:fixed;bottom:calc(68px + env(safe-area-inset-bottom));left:16px;right:76px;
           padding:12px 16px;border-radius:16px;
           background:var(--bg-surface-elevated);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
           border:1px solid rgba(255,59,48,0.3);
           display:flex;align-items:center;justify-content:space-between;
-          z-index:90;
+          z-index:110;
           animation:slideInUp 0.3s var(--ease-spring);
         `}>
           <span style="font-size:14px;font-weight:600;color:#ff3b30;">{selected().size} scheduled</span>

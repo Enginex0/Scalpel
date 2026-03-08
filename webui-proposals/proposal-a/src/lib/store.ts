@@ -38,6 +38,7 @@ function createAppStore() {
   const [monitorInfo, setMonitorInfo] = createStore<MonitorInfo>({ running: false, interval: 300 });
   const [metamoduleInfo, setMetamoduleInfo] = createSignal<MetamoduleInfo>({ id: '', name: 'detecting...' });
   const [logLines, setLogLines] = createSignal<string[]>([]);
+  const [verboseMode, setVerboseMode] = createSignal(false);
 
   const savedTheme = typeof window !== 'undefined'
     ? (localStorage.getItem('scalpel-theme') as Settings['theme'] | null)
@@ -188,7 +189,6 @@ function createAppStore() {
           package_name: pkg,
           app_name: app?.app_name || pkg,
           app_path: app?.app_path || '',
-          pending: true,
         };
       });
 
@@ -197,7 +197,6 @@ function createAppStore() {
         const successEntries = entries.filter(e => success.includes(e.package_name));
         const existing = new Set(nukedApps().map(a => a.package_name));
         setNukedApps(prev => [...prev, ...successEntries.filter(e => !existing.has(e.package_name))]);
-        setNeedsReboot(true);
         showToast(`Nuked ${success.length} app${success.length > 1 ? 's' : ''}`, 'success');
       }
     } catch {
@@ -212,7 +211,6 @@ function createAppStore() {
       const ok = await api.restoreApp(pkg, appPath);
       if (ok) {
         setNukedApps(prev => prev.filter(a => a.package_name !== pkg));
-        setNeedsReboot(true);
         showToast('App restored', 'success');
       }
     } catch {
@@ -302,12 +300,36 @@ function createAppStore() {
     }
   };
 
+  const toggleVerboseMode = () => {
+    const next = !verboseMode();
+    setVerboseMode(next);
+    if (next) {
+      setSettings({ logLevel: 'debug' });
+      api.setConfigValue('SCALPEL_LOG_LEVEL', 'debug');
+      showToast('Debug logging active — takes effect next boot', 'info');
+    } else {
+      setSettings({ logLevel: 'info' });
+      api.setConfigValue('SCALPEL_LOG_LEVEL', 'info');
+    }
+  };
+
+  const dumpDiagnostics = async () => {
+    showToast('Running diagnostics...', 'info');
+    const result = await api.saveDiagToDownload();
+    if (result.success) {
+      showToast(`Saved to Download/${result.filename}`, 'success');
+    } else {
+      showToast('Failed to save diagnostics', 'error');
+    }
+  };
+
   return {
     activeTab, setActiveTab, loading, needsReboot, setNeedsReboot, mockMode,
     scannedApps, nukedApps, promotedApps, userApps, status, bootInfo, monitorInfo, metamoduleInfo, logLines,
     debloatSelected, setDebloatSelected,
     systemizeSelected, setSystemizeSelected,
     settings, currentTheme, toast, showToast,
+    verboseMode, toggleVerboseMode, dumpDiagnostics,
     loadInitialData, nukeApps, restoreApp, restoreAllNuked, promoteApp, demoteApp, updateSettings, refreshAppList,
   };
 }

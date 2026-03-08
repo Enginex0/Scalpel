@@ -4,7 +4,7 @@ export type SystemizeTarget = 'app' | 'priv-app';
 
 export type Category = 'essential' | 'caution' | 'safe' | 'google' | 'unknown';
 
-export type ModeOverride = 'auto' | 'pm';
+export type ModeOverride = 'auto' | 'overlay' | 'pm';
 export type ActiveMode = 'overlay' | 'pm' | 'none' | 'running' | 'error';
 
 export interface MetamoduleInfo {
@@ -32,7 +32,6 @@ export interface DebloatedApp {
   app_name: string;
   package_name: string;
   app_path: string;
-  pending?: boolean;
 }
 
 // UI-only extension with display metadata not written to nuke_list.json

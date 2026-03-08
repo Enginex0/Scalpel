@@ -223,7 +223,7 @@ export function SystemizeTab() {
           background:var(--bg-surface-elevated);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
           border:1px solid var(--glass-border);
           display:flex;align-items:center;justify-content:space-between;
-          z-index:90;
+          z-index:110;
           animation:slideInUp 0.3s var(--ease-spring);
         `}>
           <span style="font-size:14px;font-weight:600;">{selected().size} selected</span>

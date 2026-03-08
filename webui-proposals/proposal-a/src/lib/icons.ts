@@ -26,6 +26,9 @@ export const ICONS = {
   log: "M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13z",
   monitor: "M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM5 15h14v2H5z",
   promote: "M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z",
+  download: "M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z",
+  trash: "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z",
+  terminal: "M20 19.88V4.12C20 3.5 19.5 3 18.88 3H5.12C4.5 3 4 3.5 4 4.12v15.76C4 20.5 4.5 21 5.12 21h13.76c.62 0 1.12-.5 1.12-1.12zM7.29 12.71L10.59 16l-3.3 3.29 1.42 1.42 4.7-4.71-4.7-4.71-1.42 1.42zM14 18h4v-2h-4v2z",
 } as const;
 
 export type IconName = keyof typeof ICONS;

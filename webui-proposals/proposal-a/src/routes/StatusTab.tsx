@@ -99,9 +99,9 @@ export function StatusTab() {
   };
 
   const stats = () => [
-    { label: 'Debloated', value: store.status.debloated, max: 30, color: 'var(--color-success)', icon: ICONS.debloat },
+    { label: 'Debloated', value: store.nukedApps().length, max: 30, color: 'var(--color-success)', icon: ICONS.debloat },
     { label: 'Failed', value: store.status.debloat_failed, max: 10, color: store.status.debloat_failed > 0 ? 'var(--color-error)' : 'var(--color-success)', icon: ICONS.error },
-    { label: 'Systemized', value: store.status.systemized, max: 10, color: 'var(--text-accent)', icon: ICONS.promote },
+    { label: 'Systemized', value: store.promotedApps().length, max: 10, color: 'var(--text-accent)', icon: ICONS.promote },
     { label: 'Repairs', value: store.status.monitor_repairs ?? 0, max: 10, color: 'var(--color-warning)', icon: ICONS.restore },
   ];
 

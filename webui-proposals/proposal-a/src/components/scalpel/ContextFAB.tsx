@@ -3,7 +3,7 @@ import { store } from '../../lib/store';
 import { Modal } from '../layout/Modal';
 import { Button } from '../core/Button';
 import { ICONS } from '../../lib/icons';
-import { CATEGORY_COLORS, NO_REBOOT_DEBLOAT_MODES } from '../../lib/constants';
+import { CATEGORY_COLORS } from '../../lib/constants';
 import { api } from '../../lib/api';
 
 function fabPosition() {
@@ -67,10 +67,6 @@ function NukeFAB() {
       .filter(a => sel.has(a.package_name))
       .map(a => ({ name: a.app_name, category: a.category }));
   });
-
-  const needsReboot = createMemo(() =>
-    !NO_REBOOT_DEBLOAT_MODES.has(store.status.mode)
-  );
 
   const handleNuke = async () => {
     await store.nukeApps([...store.debloatSelected()]);
@@ -137,7 +133,6 @@ function NukeFAB() {
 
         <p style="text-align:center;color:var(--text-secondary);margin-bottom:16px;font-size:14px;">
           Remove {count()} app{count() > 1 ? 's' : ''}?
-          {needsReboot() ? ' This will take effect after reboot.' : ' Changes apply immediately.'}
         </p>
         <div style="display:flex;gap:12px;">
           <Button variant="ghost" fullWidth onClick={() => setConfirmOpen(false)}>Cancel</Button>
