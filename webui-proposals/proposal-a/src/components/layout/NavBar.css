@@ -9,12 +9,12 @@
   -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid var(--glass-border);
   padding: 8px 16px;
-  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  padding-bottom: max(48px, env(safe-area-inset-bottom, 48px));
   z-index: 100;
 }
 
 .navbar--fixed-nav {
-  padding-bottom: calc(48px + max(20px, env(safe-area-inset-bottom, 0px)));
+  padding-bottom: calc(48px + max(48px, env(safe-area-inset-bottom, 48px)));
 }
 
 .navbar__tabs {

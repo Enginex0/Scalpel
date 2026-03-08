@@ -70,14 +70,6 @@ export function SystemizeTab() {
 
   return (
     <div style="padding:0 16px;padding-top:48px;">
-      {/* Description */}
-      <div style="background:rgba(var(--accent-rgb), 0.05);border:1px solid rgba(var(--accent-rgb), 0.1);padding:16px;border-radius:12px;margin-bottom:20px;">
-        <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:6px;">Promote to System</div>
-        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;">
-          Elevate user apps to system-level, surviving factory resets. Select apps below, then tap the promote button to choose installation level.
-        </div>
-      </div>
-
       {/* Hero stats */}
       <div style="display:flex;gap:16px;margin-bottom:20px;">
         <div style="flex:1;text-align:center;">
