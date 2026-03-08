@@ -26,7 +26,7 @@ export function App() {
         </div>
       }
     >
-      <div style={`min-height:100vh;min-height:100dvh;background:${store.currentTheme().bgPrimary};color:${store.currentTheme().textPrimary};font-family:${store.currentTheme().fontBody};overflow-x:hidden;`}>
+      <div style={`min-height:100vh;min-height:100dvh;background:${store.currentTheme().bgPrimary};color:${store.currentTheme().textPrimary};font-family:${store.currentTheme().fontBody};`}>
         {/* Header only on status/settings tabs -- debloat/systemize need the vertical space */}
         <Show when={store.activeTab() === 'status' || store.activeTab() === 'settings'}>
           <Header />

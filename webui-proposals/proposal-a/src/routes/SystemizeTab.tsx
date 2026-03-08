@@ -69,21 +69,41 @@ export function SystemizeTab() {
   };
 
   return (
-    <div style="padding:0 16px;padding-top:48px;">
-      {/* Hero stats */}
-      <div style="display:flex;gap:16px;margin-bottom:20px;">
-        <div style="flex:1;text-align:center;">
-          <div style="font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:700;" class="gradient-text">
-            {store.promotedApps().length}
+    <div style="padding:0 16px;">
+      {/* Sticky hero stats */}
+      <div style="position:sticky;top:0;z-index:10;background:var(--bg-primary);padding-top:48px;padding-bottom:12px;">
+        <div style="display:flex;gap:16px;">
+          <div style="flex:1;text-align:center;">
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:700;" class="gradient-text">
+              {store.promotedApps().length}
+            </div>
+            <div style="font-size:12px;color:var(--text-tertiary);font-weight:500;">PROMOTED</div>
           </div>
-          <div style="font-size:12px;color:var(--text-tertiary);font-weight:500;">PROMOTED</div>
+          <div style="width:1px;background:var(--glass-border);" />
+          <div style="flex:1;text-align:center;">
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:700;color:var(--text-secondary);">
+              {availableCount()}
+            </div>
+            <div style="font-size:12px;color:var(--text-tertiary);font-weight:500;">AVAILABLE</div>
+          </div>
         </div>
-        <div style="width:1px;background:var(--glass-border);" />
-        <div style="flex:1;text-align:center;">
-          <div style="font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:700;color:var(--text-secondary);">
-            {availableCount()}
-          </div>
-          <div style="font-size:12px;color:var(--text-tertiary);font-weight:500;">AVAILABLE</div>
+
+        <div style="position:relative;margin-top:12px;margin-bottom:8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--text-tertiary)" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);">
+            <path d={ICONS.search} />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search user apps..."
+            aria-label="Search user apps"
+            value={searchQuery()}
+            onInput={(e) => setSearchQuery(e.currentTarget.value)}
+            style="width:100%;padding:10px 12px 10px 42px;background:var(--bg-surface);border:1px solid var(--glass-border);border-radius:100px;color:var(--text-primary);font-size:14px;"
+          />
+        </div>
+
+        <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:0;padding-left:4px;">
+          Tap app to mark for promotion
         </div>
       </div>
 
@@ -187,24 +207,6 @@ export function SystemizeTab() {
       </div>
 
       <Show when={openSections().has('available')}>
-        <div style="position:relative;margin-bottom:8px;">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--text-tertiary)" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);">
-            <path d={ICONS.search} />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search user apps..."
-            aria-label="Search user apps"
-            value={searchQuery()}
-            onInput={(e) => setSearchQuery(e.currentTarget.value)}
-            style="width:100%;padding:10px 12px 10px 42px;background:var(--bg-surface);border:1px solid var(--glass-border);border-radius:100px;color:var(--text-primary);font-size:14px;"
-          />
-        </div>
-
-        <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:12px;padding-left:4px;">
-          Tap app to mark for promotion
-        </div>
-
         <div style="display:flex;flex-direction:column;gap:6px;">
           <For each={availableUserApps()}>
             {(app, i) => {

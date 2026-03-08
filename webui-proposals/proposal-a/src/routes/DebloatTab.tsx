@@ -114,50 +114,57 @@ export function DebloatTab() {
   };
 
   return (
-    <div style={`padding:0 16px;padding-top:48px;padding-bottom:${selected().size > 0 || restoreSelected().size > 0 ? '140' : '80'}px;`}>
-      {/* Search + refresh */}
-      <div style="display:flex;gap:8px;margin-bottom:8px;padding-top:16px;">
-        <div style="position:relative;flex:1;">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--text-tertiary)" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);">
-            <path d={ICONS.search} />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search apps..."
-            aria-label="Search apps"
-            value={searchQuery()}
-            onInput={(e) => setSearchQuery(e.currentTarget.value)}
+    <div style={`padding:0 16px;padding-bottom:${selected().size > 0 || restoreSelected().size > 0 ? '140' : '80'}px;`}>
+      {/* Sticky toolbar */}
+      <div style="position:sticky;top:0;z-index:10;background:var(--bg-primary);padding-top:48px;padding-bottom:4px;">
+        <div style="display:flex;gap:8px;margin-bottom:8px;padding-top:16px;">
+          <div style="position:relative;flex:1;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--text-tertiary)" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);">
+              <path d={ICONS.search} />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search apps..."
+              aria-label="Search apps"
+              value={searchQuery()}
+              onInput={(e) => setSearchQuery(e.currentTarget.value)}
+              style={`
+                width:100%;padding:12px 12px 12px 42px;
+                background:var(--bg-surface);border:1px solid var(--glass-border);border-radius:100px;
+                color:var(--text-primary);font-size:14px;
+                transition:border-color 0.2s ease;
+              `}
+              onFocus={(e) => e.currentTarget.style.borderColor = `rgba(var(--accent-rgb), 0.5)`}
+              onBlur={(e) => e.currentTarget.style.borderColor = `var(--glass-border)`}
+            />
+          </div>
+          <button
+            onClick={handleRefresh}
+            disabled={scanning()}
+            aria-label="Refresh app list"
             style={`
-              width:100%;padding:12px 12px 12px 42px;
-              background:var(--bg-surface);border:1px solid var(--glass-border);border-radius:100px;
-              color:var(--text-primary);font-size:14px;
-              transition:border-color 0.2s ease;
+              width:44px;height:44px;border-radius:50%;flex-shrink:0;
+              background:var(--bg-surface);border:1px solid var(--glass-border);
+              color:var(--text-tertiary);display:flex;align-items:center;justify-content:center;
+              transition:all 0.2s ease;cursor:pointer;
             `}
-            onFocus={(e) => e.currentTarget.style.borderColor = `rgba(var(--accent-rgb), 0.5)`}
-            onBlur={(e) => e.currentTarget.style.borderColor = `var(--glass-border)`}
-          />
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
+              style={scanning() ? 'animation:spin 1s linear infinite;' : ''}>
+              <path d={ICONS.refresh} />
+            </svg>
+          </button>
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={scanning()}
-          aria-label="Refresh app list"
-          style={`
-            width:44px;height:44px;border-radius:50%;flex-shrink:0;
-            background:var(--bg-surface);border:1px solid var(--glass-border);
-            color:var(--text-tertiary);display:flex;align-items:center;justify-content:center;
-            transition:all 0.2s ease;cursor:pointer;
-          `}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
-            style={scanning() ? 'animation:spin 1s linear infinite;' : ''}>
-            <path d={ICONS.refresh} />
-          </svg>
-        </button>
-      </div>
 
-      {/* Instruction hint */}
-      <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:12px;padding-left:4px;">
-        Tap app to mark for removal
+        <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:12px;padding-left:4px;">
+          Tap app to mark for removal
+        </div>
+
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">
+          <span style="font-family:'Space Grotesk',sans-serif;font-size:32px;font-weight:700;" class="gradient-text">{totalAvailable()}</span>
+          <span style="color:var(--text-tertiary);font-size:13px;">apps available</span>
+        </div>
+        <div class="category-separator" />
       </div>
 
       {/* Nuked apps section */}
@@ -242,13 +249,6 @@ export function DebloatTab() {
           </div>
         </Show>
       </Show>
-
-      {/* Available apps count */}
-      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">
-        <span style="font-family:'Space Grotesk',sans-serif;font-size:32px;font-weight:700;" class="gradient-text">{totalAvailable()}</span>
-        <span style="color:var(--text-tertiary);font-size:13px;">apps available</span>
-      </div>
-      <div class="category-separator" />
 
       {/* Collapsible category sections */}
       <For each={sectionApps()}>
