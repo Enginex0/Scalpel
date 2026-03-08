@@ -45,8 +45,7 @@ _write_status() {
 }
 
 _nuke_unlock() {
-    exec 8>&- 2>/dev/null
-    rm -f "${SCALPEL_DATA}/nuke.lock" 2>/dev/null
+    rm -rf "${SCALPEL_DATA}/nuke.lock.d" 2>/dev/null
 }
 
 _prune_empty_parents() {
@@ -100,13 +99,19 @@ nuke_run() {
 
     log_i "$_tag" "starting debloat run"
 
-    local _nuke_lock="${SCALPEL_DATA}/nuke.lock"
-    exec 8>"$_nuke_lock"
-    if ! flock -n 8; then
-        log_w "$_tag" "another nuke_run is active, skipping"
-        exec 8>&-
-        return 1
+    # mkdir is atomic on all filesystems, no FD redirection needed
+    local _nuke_lock="${SCALPEL_DATA}/nuke.lock.d"
+    if ! mkdir "$_nuke_lock" 2>/dev/null; then
+        local _holder
+        _holder=$(cat "${_nuke_lock}/pid" 2>/dev/null)
+        if [ -n "$_holder" ] && kill -0 "$_holder" 2>/dev/null; then
+            log_w "$_tag" "another nuke_run is active (pid=$_holder), skipping"
+            return 1
+        fi
+        rm -rf "$_nuke_lock"
+        mkdir "$_nuke_lock" 2>/dev/null || return 1
     fi
+    echo $$ > "${_nuke_lock}/pid" 2>/dev/null
 
     _write_status "running" 0 0
 
