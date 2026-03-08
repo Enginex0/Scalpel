@@ -59,7 +59,7 @@ export const MOCK_USER_APPS: UserApp[] = [
 ];
 
 export const MOCK_STATUS: StatusData = {
-  mode: 'whiteout',
+  mode: 'overlay',
   debloated: 3,
   debloat_failed: 0,
   systemized: 2,
@@ -82,12 +82,12 @@ export const MOCK_MONITOR_INFO: MonitorInfo = { running: true, interval: 300 };
 export const MOCK_LOG_LINES = [
   '[2026-01-31 08:00:01] INFO  [service] Boot stage: service.sh starting',
   '[2026-01-31 08:00:01] INFO  [config] Config loaded: mode=auto, log_level=info',
-  '[2026-01-31 08:00:02] INFO  [detect] Probing modes: zeromount=no, mountify=no, symlink=no, whiteout=yes',
-  '[2026-01-31 08:00:02] INFO  [detect] Selected mode: whiteout',
+  '[2026-01-31 08:00:02] INFO  [detect] Whiteout capability: ok, metamodule: meta-zeromount',
+  '[2026-01-31 08:00:02] INFO  [nuke] mode=overlay apps=3',
   '[2026-01-31 08:00:02] INFO  [nuke] Starting debloat run: 3 apps queued',
-  '[2026-01-31 08:00:03] INFO  [nuke] Debloating: com.miui.analytics (whiteout)',
-  '[2026-01-31 08:00:03] INFO  [nuke] Debloating: com.facebook.services (whiteout)',
-  '[2026-01-31 08:00:03] INFO  [nuke] Debloating: com.facebook.system (whiteout)',
+  '[2026-01-31 08:00:03] INFO  [nuke] debloated: com.miui.analytics',
+  '[2026-01-31 08:00:03] INFO  [nuke] debloated: com.facebook.services',
+  '[2026-01-31 08:00:03] INFO  [nuke] debloated: com.facebook.system',
   '[2026-01-31 08:00:04] INFO  [nuke] Debloat complete: 3 success, 0 failed',
   '[2026-01-31 08:00:05] INFO  [verify] Starting verification pass',
   '[2026-01-31 08:00:05] INFO  [verify] All 3 debloated apps verified OK',
@@ -96,6 +96,6 @@ export const MOCK_LOG_LINES = [
   '[2026-01-31 08:05:07] INFO  [monitor] Health check: all clean',
   '[2026-01-31 08:10:07] INFO  [monitor] Health check: all clean',
   '[2026-01-31 08:10:08] WARN  [monitor] Detected repair needed: com.miui.analytics reappeared',
-  '[2026-01-31 08:10:08] INFO  [monitor] Re-applying whiteout for com.miui.analytics',
+  '[2026-01-31 08:10:08] INFO  [monitor] Re-applied whiteout for com.miui.analytics',
   '[2026-01-31 08:10:09] INFO  [monitor] Repair complete: 1 app fixed',
 ];

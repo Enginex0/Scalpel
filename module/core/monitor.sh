@@ -51,35 +51,42 @@ _check_debloated_apps() {
         mode="$(_jq -r '.mode // ""' "$STATUS_FILE" 2>/dev/null)"
     fi
     case "$mode" in
-        ""|unknown|none|null|running|pm_deferred|error) return 0 ;;
+        ""|unknown|none|null|running|error) return 0 ;;
     esac
 
-    local mode_script="${MODDIR}/modes/mode_${mode}.sh"
-    [ ! -f "$mode_script" ] && return 0
-    . "$mode_script"
+    . "${MODDIR}/core/whiteout_helpers.sh"
 
     local tmp="${SCALPEL_DATA}/.monitor_batch.$$"
     _jq -r '.[] | "\(.package_name)\t\(.app_path)"' "$NUKE_LIST" > "$tmp" 2>/dev/null
     [ ! -s "$tmp" ] && { rm -f "$tmp"; return 0; }
 
     local repaired=0
-    # Literal tab in IFS
     while IFS='	' read -r pkg app_path; do
         [ -z "$pkg" ] && continue
         [ -z "$app_path" ] && continue
 
-        if ! mode_verify "$pkg" "$app_path"; then
+        local needs_repair="false"
+        if [ "$mode" = "pm" ]; then
+            pm list packages -d 2>/dev/null | grep -qF "package:${pkg}" || needs_repair="true"
+        else
+            whiteout_verify "$MODDIR" "$app_path" || needs_repair="true"
+        fi
+
+        if [ "$needs_repair" = "true" ]; then
             log_w "$_tag" "debloat reverted: $pkg"
-            # Concurrent nuke.sh may have started between check and here
             if _is_nuke_running; then
                 log_d "$_tag" "nuke lock appeared, aborting repair cycle"
                 break
             fi
-            if mode_debloat "$pkg" "$app_path"; then
-                repaired=$((repaired + 1))
-                log_i "$_tag" "re-applied debloat: $pkg"
+            if [ "$mode" = "pm" ]; then
+                pm disable-user --user 0 "$pkg" >/dev/null 2>&1 && repaired=$((repaired + 1)) || log_e "$_tag" "repair failed: $pkg"
             else
-                log_e "$_tag" "repair failed: $pkg"
+                if whiteout_create "$MODDIR" "$app_path"; then
+                    repaired=$((repaired + 1))
+                    log_i "$_tag" "re-applied debloat: $pkg"
+                else
+                    log_e "$_tag" "repair failed: $pkg"
+                fi
             fi
         fi
     done < "$tmp"
@@ -87,6 +94,7 @@ _check_debloated_apps() {
     rm -f "$tmp"
 
     if [ "$repaired" -gt 0 ]; then
+        whiteout_fix_vendor_symlinks "$MODDIR"
         _update_repair_count "$repaired"
     fi
 }
@@ -169,8 +177,10 @@ _update_description() {
     # APatch fallback
     printf '%s' "$desc" > "${MODDIR}/override.description" 2>/dev/null
 
-    # Magisk reads module.prop directly — use # delimiter since desc contains |
-    sed -i "s#^description=.*#description=${desc}#" "$prop_file" 2>/dev/null
+    # Magisk reads module.prop directly
+    awk -v d="$desc" '{if(/^description=/){print "description=" d}else{print}}' "$prop_file" > "${prop_file}.tmp.$$" \
+        && mv "${prop_file}.tmp.$$" "$prop_file" \
+        || rm -f "${prop_file}.tmp.$$"
 }
 
 monitor_start() {

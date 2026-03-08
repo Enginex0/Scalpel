@@ -19,13 +19,9 @@ export const APP_VERSION = '0.1.0';
 export const MODULE_ID = 'scalpel';
 
 export const MODES: ModeInfo[] = [
-  { id: 'auto', name: 'Auto-detect', description: 'Evaluates system capabilities at each boot, selects best available mode' },
-  { id: 'zeromount', name: 'ZeroMount VFS', description: 'Kernel-level VFS interception for invisible file hiding' },
-  { id: 'mountify', name: 'Standalone Mount', description: 'tmpfs mounts per partition. Ephemeral (re-applied each boot)' },
-  { id: 'symlink', name: 'Symlink Overlay', description: 'Empty opaque directories in module overlay' },
-  { id: 'whiteout', name: 'OverlayFS Whiteout', description: 'Character device nodes treated as deleted by overlayfs' },
-  { id: 'magisk', name: 'Magic Mount', description: 'Whiteout files in module directory for Magisk mount system' },
-  { id: 'pm', name: 'Package Manager', description: 'pm disable-user. Universal fallback. Least stealthy' },
+  { id: 'overlay', name: 'Overlay', description: 'Standard overlayfs whiteouts — metamodule handles mounting' },
+  { id: 'pm', name: 'PM Disable', description: 'pm disable-user — universal fallback, no filesystem changes' },
+  { id: 'none', name: 'Ready', description: 'No apps debloated yet' },
 ];
 
 // FOUNDATION.md 10.1 -- exact category colors from categories.json
@@ -37,5 +33,4 @@ export const CATEGORY_COLORS: Record<string, { color: string; glow: string; labe
   unknown:   { color: '#9e9e9e', glow: 'rgba(158, 158, 158, 0.4)', label: 'Unknown' },
 };
 
-// Modes that do NOT require reboot for debloat (FOUNDATION.md 5.12)
-export const NO_REBOOT_DEBLOAT_MODES = new Set(['zeromount', 'mountify', 'pm']);
+export const NO_REBOOT_DEBLOAT_MODES = new Set(['pm']);

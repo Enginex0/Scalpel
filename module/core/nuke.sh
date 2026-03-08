@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # shellcheck shell=bash disable=SC3043,SC1090
-# Debloat orchestrator -- iterate nuke_list.json, dispatch to active mode, track results
+# Debloat orchestrator -- create standard overlayfs whiteouts in module dir, let metamodule handle mounting
 
 MODDIR="${MODDIR:-$(dirname "$(dirname "$(readlink -f "$0")")")}"
 SCALPEL_DATA="/data/adb/scalpel"
@@ -49,11 +49,45 @@ _nuke_unlock() {
     rm -f "${SCALPEL_DATA}/nuke.lock" 2>/dev/null
 }
 
+_prune_empty_parents() {
+    local dir="$1" stop="$2"
+    while [ "$dir" != "$stop" ] && [ "$dir" != "/" ]; do
+        rmdir "$dir" 2>/dev/null || break
+        dir="$(dirname "$dir")"
+    done
+}
+
+nuke_restore() {
+    local _tag="nuke"
+    local pkg="$1" app_path="$2"
+    [ -z "$pkg" ] || [ -z "$app_path" ] && return 1
+
+    . "${MODDIR}/core/logging.sh" 2>/dev/null
+    . "${MODDIR}/core/whiteout_helpers.sh" 2>/dev/null
+
+    log_init 2>/dev/null
+
+    local app_dir
+    app_dir="$(dirname "$app_path")"
+
+    # Remove whiteout from module overlay
+    whiteout_remove "$MODDIR" "$app_path"
+    _prune_empty_parents "${MODDIR}${app_dir}" "$MODDIR"
+
+    # Re-register with package manager
+    pm install-existing "$pkg" >/dev/null 2>&1
+    pm enable "$pkg" >/dev/null 2>&1
+
+    log_i "$_tag" "restored: $pkg"
+    return 0
+}
+
 nuke_run() {
     local _tag="nuke"
     . "${MODDIR}/core/logging.sh"
     . "${MODDIR}/core/config.sh"
     . "${MODDIR}/core/detect.sh"
+    . "${MODDIR}/core/whiteout_helpers.sh"
 
     # Preserve caller's overrides -- config_init resets via _config_defaults()
     local _saved_mode_override="${SCALPEL_MODE_OVERRIDE:-}"
@@ -74,17 +108,11 @@ nuke_run() {
         return 1
     fi
 
-    # Mark in-flight so service.sh can detect interrupted runs (KSU 10s kill)
-    # Detect mode first so status always shows available mode
-    local mode
-    mode="$(detect_mode)"
-    [ -z "$mode" ] && mode="pm_deferred"
-
     _write_status "running" 0 0
 
     if [ ! -f "$NUKE_LIST" ]; then
         log_i "$_tag" "no nuke list found, nothing to do"
-        _write_status "$mode" 0 0
+        _write_status "none" 0 0
         _nuke_unlock
         return 0
     fi
@@ -101,44 +129,18 @@ nuke_run() {
     local count
     count="$("$jq_bin" 'length' "$NUKE_LIST" 2>/dev/null)"
     count="${count:-0}"
-    # toybox wc pads with spaces on some ROMs
     count="$(echo "$count" | tr -d '[:space:]')"
 
     if [ "$count" = "0" ]; then
         log_i "$_tag" "nuke list empty, nothing to do"
-        _write_status "$mode" 0 0
+        _write_status "none" 0 0
         _nuke_unlock
         return 0
     fi
-
-    if [ "$mode" = "pm_deferred" ]; then
-        log_i "$_tag" "no filesystem mode available, deferring to service.sh for pm"
-        _write_status "pm_deferred" 0 "$count"
-        _nuke_unlock
-        return 0
-    fi
-
-    local mode_script="${MODDIR}/modes/mode_${mode}.sh"
-    if [ ! -f "$mode_script" ]; then
-        log_e "$_tag" "mode script not found: $mode_script"
-        _write_status "error" 0 0
-        _nuke_unlock
-        return 1
-    fi
-    . "$mode_script"
-
-    if ! mode_probe; then
-        log_e "$_tag" "mode $mode probe failed"
-        _write_status "error" 0 0
-        _nuke_unlock
-        return 1
-    fi
-
-    log_i "$_tag" "mode=$mode apps=$count"
 
     # Disable-only mode: pm disable each package, skip all filesystem operations
-    if [ "$SCALPEL_DISABLE_ONLY" = "true" ]; then
-        log_i "$_tag" "disable-only mode: skipping filesystem debloat"
+    if [ "$SCALPEL_DISABLE_ONLY" = "true" ] || [ "$SCALPEL_MODE_OVERRIDE" = "pm" ]; then
+        log_i "$_tag" "pm-only mode: skipping filesystem debloat"
         local success=0 failed=0 pkg
         while read -r pkg; do
             [ -z "$pkg" ] && continue
@@ -154,10 +156,19 @@ $("$jq_bin" -r '.[].package_name' "$NUKE_LIST" 2>/dev/null)
 EOF
         _write_status "pm" "$success" "$failed"
         _nuke_unlock
-        log_i "$_tag" "disable-only complete: success=$success failed=$failed"
+        log_i "$_tag" "pm-only complete: success=$success failed=$failed"
         [ "$failed" -gt 0 ] && return 1
         return 0
     fi
+
+    # Determine debloat strategy: overlay whiteouts (standard) or pm fallback
+    local mode="overlay"
+    if ! can_create_whiteouts; then
+        log_w "$_tag" "cannot create whiteouts, falling back to pm disable"
+        mode="pm"
+    fi
+
+    log_i "$_tag" "mode=$mode apps=$count"
 
     # Pre-debloat pm disable for immediate UI hiding (system updates handled by post_boot.sh)
     if [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; then
@@ -204,47 +215,50 @@ EOF
             fi
         fi
 
-        if mode_debloat "$pkg" "$app_path"; then
-            success=$((success + 1))
-            log_d "$_tag" "debloated: $pkg"
+        if [ "$mode" = "overlay" ]; then
+            if whiteout_create "$MODDIR" "$app_path"; then
+                success=$((success + 1))
+                log_d "$_tag" "debloated: $pkg"
+            else
+                failed=$((failed + 1))
+                log_e "$_tag" "failed to debloat: $pkg"
+            fi
         else
-            failed=$((failed + 1))
-            log_e "$_tag" "failed to debloat: $pkg"
+            if pm disable-user --user 0 "$pkg" >/dev/null 2>&1; then
+                success=$((success + 1))
+                log_d "$_tag" "disabled: $pkg"
+            else
+                failed=$((failed + 1))
+                log_e "$_tag" "failed to disable: $pkg"
+            fi
         fi
     done < "$tmp"
 
     rm -f "$tmp"
 
-    # Raw whiteouts: user-defined paths routed through active mode
-    local _raw_file="${SCALPEL_DATA}/raw_whiteouts.txt"
-    if [ -f "$_raw_file" ]; then
-        log_d "$_tag" "processing raw_whiteouts.txt"
-        local _line _raw_pkg
-        while IFS= read -r _line; do
-            case "$_line" in '#'*|'') continue ;; esac
-            case "$_line" in
-                /system/*|/vendor/*|/product/*|/system_ext/*|/oem/*|/odm/*) ;;
-                *) log_w "$_tag" "raw: skipping invalid path: $_line"; continue ;;
-            esac
-            _raw_pkg="raw:${_line##*/}"
-            if mode_debloat "$_raw_pkg" "${_line}/_.apk"; then
-                log_d "$_tag" "raw hidden: $_line"
-            else
-                log_w "$_tag" "raw hide failed: $_line"
-            fi
-        done < "$_raw_file"
-    fi
+    # Raw whiteouts: user-defined paths
+    if [ "$mode" = "overlay" ]; then
+        local _raw_file="${SCALPEL_DATA}/raw_whiteouts.txt"
+        if [ -f "$_raw_file" ]; then
+            log_d "$_tag" "processing raw_whiteouts.txt"
+            local _line
+            while IFS= read -r _line; do
+                case "$_line" in '#'*|'') continue ;; esac
+                case "$_line" in
+                    /system/*|/vendor/*|/product/*|/system_ext/*|/oem/*|/odm/*) ;;
+                    *) log_w "$_tag" "raw: skipping invalid path: $_line"; continue ;;
+                esac
+                if whiteout_create "$MODDIR" "${_line}/_.apk"; then
+                    log_d "$_tag" "raw hidden: $_line"
+                else
+                    log_w "$_tag" "raw hide failed: $_line"
+                fi
+            done < "$_raw_file"
+        fi
 
-    # Vendor symlink fixup runs ONCE after all debloats (not per-app)
-    case "$mode" in
-        whiteout|magisk)
-            . "${MODDIR}/core/whiteout_helpers.sh"
-            whiteout_fix_vendor_symlinks "${MODDIR}"
-            ;;
-        symlink)
-            type _fix_vendor_symlinks >/dev/null 2>&1 && _fix_vendor_symlinks "${MODDIR}"
-            ;;
-    esac
+        # Vendor symlink fixup runs ONCE after all debloats
+        whiteout_fix_vendor_symlinks "$MODDIR"
+    fi
 
     # Re-enable apps from app_list that are disabled but NOT being nuked
     local _app_list="${SCALPEL_DATA}/app_list.json"

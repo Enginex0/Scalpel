@@ -2,7 +2,7 @@ import { createSignal, createRoot, createMemo, createEffect } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type {
   Tab, ScannedApp, DebloatedApp, SystemizedApp, UserApp,
-  StatusData, BootInfo, MonitorInfo, Settings, Category, ActiveMode, SystemizeTarget,
+  StatusData, BootInfo, MonitorInfo, MetamoduleInfo, Settings, Category, ActiveMode, SystemizeTarget,
 } from './types';
 import { api, shouldUseMock } from './api';
 import { darkTheme, lightTheme, amoledTheme, applyTheme, getAccentStyles, accentPresets } from './theme';
@@ -36,6 +36,7 @@ function createAppStore() {
 
   const [bootInfo, setBootInfo] = createStore<BootInfo>({ boot_count: 0 });
   const [monitorInfo, setMonitorInfo] = createStore<MonitorInfo>({ running: false, interval: 300 });
+  const [metamoduleInfo, setMetamoduleInfo] = createSignal<MetamoduleInfo>({ id: '', name: 'detecting...' });
   const [logLines, setLogLines] = createSignal<string[]>([]);
 
   const savedTheme = typeof window !== 'undefined'
@@ -139,6 +140,7 @@ function createAppStore() {
       api.getBootInfo(),
       api.getMonitorInfo(),
       api.getLogLines(),
+      api.getMetamoduleInfo(),
     ]);
 
     const settled = <T,>(r: PromiseSettledResult<T>, fallback: T) =>
@@ -164,6 +166,7 @@ function createAppStore() {
     setBootInfo(settled(results[5], { boot_count: 0 }));
     setMonitorInfo(settled(results[6], { running: false, interval: 300 }));
     setLogLines(settled(results[7], []));
+    setMetamoduleInfo(settled(results[8], { id: '', name: 'none' }));
     setLoading('status', false);
     setLoading('config', false);
 
@@ -204,7 +207,7 @@ function createAppStore() {
     try {
       const nuked = nukedApps().find(a => a.package_name === pkg);
       const appPath = nuked?.app_path || '';
-      const ok = await api.restoreApp(pkg, appPath, status.mode);
+      const ok = await api.restoreApp(pkg, appPath);
       if (ok) {
         setNukedApps(prev => prev.filter(a => a.package_name !== pkg));
         setNeedsReboot(true);
@@ -292,7 +295,7 @@ function createAppStore() {
 
   return {
     activeTab, setActiveTab, loading, needsReboot, setNeedsReboot, mockMode,
-    scannedApps, nukedApps, promotedApps, userApps, status, bootInfo, monitorInfo, logLines,
+    scannedApps, nukedApps, promotedApps, userApps, status, bootInfo, monitorInfo, metamoduleInfo, logLines,
     debloatSelected, setDebloatSelected,
     systemizeSelected, setSystemizeSelected,
     settings, currentTheme, toast, showToast,

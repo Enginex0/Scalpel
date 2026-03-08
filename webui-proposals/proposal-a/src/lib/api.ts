@@ -1,6 +1,6 @@
 import type {
   ScannedApp, DebloatedApp, SystemizedApp, UserApp,
-  StatusData, BootInfo, MonitorInfo, ActiveMode, SystemizeTarget,
+  StatusData, BootInfo, MonitorInfo, SystemizeTarget, MetamoduleInfo, ActiveMode,
 } from './types';
 import { PATHS } from './constants';
 import { ksuExec, listPackages, getPackagesInfo } from './ksuApi';
@@ -207,7 +207,7 @@ export const api = {
     return { success: entries.map(e => e.package_name), failed: [] };
   },
 
-  async restoreApp(pkg: string, appPath: string, mode: ActiveMode): Promise<boolean> {
+  async restoreApp(pkg: string, appPath: string): Promise<boolean> {
     if (shouldUseMock()) {
       await new Promise(r => setTimeout(r, 500));
       return true;
@@ -221,9 +221,8 @@ export const api = {
     const updated = currentList.filter(a => a.package_name !== pkg);
     await writeJsonFile(PATHS.NUKE_LIST, updated);
 
-    const safeMode = mode.replace(/[^a-z_]/g, '');
-    log.info('api', `restoreApp: restoring ${pkg} via mode_${safeMode}`);
-    const cmd = `MODDIR=${PATHS.MODULE_DIR}; . $MODDIR/core/logging.sh; log_init; . $MODDIR/core/config.sh; config_init; . $MODDIR/modes/mode_${safeMode}.sh; mode_restore ${escapeShellArg(pkg)} ${escapeShellArg(appPath)}`;
+    log.info('api', `restoreApp: restoring ${pkg}`);
+    const cmd = `MODDIR=${PATHS.MODULE_DIR}; . $MODDIR/core/nuke.sh; nuke_restore ${escapeShellArg(pkg)} ${escapeShellArg(appPath)}`;
     const { errno, stderr } = await ksuExec(cmd);
     if (errno !== 0) {
       log.error('api', `restoreApp: failed for ${pkg}`, stderr);
@@ -231,6 +230,19 @@ export const api = {
     }
     log.info('api', `restoreApp: ${pkg} restored`);
     return true;
+  },
+
+  async getMetamoduleInfo(): Promise<MetamoduleInfo> {
+    if (shouldUseMock()) return { id: 'meta-zeromount', name: 'ZeroMount' };
+    try {
+      const cmd = `MODDIR=${PATHS.MODULE_DIR}; . $MODDIR/core/logging.sh; log_init 2>/dev/null; . $MODDIR/core/detect.sh; detect_metamodule`;
+      const { errno, stdout } = await ksuExec(cmd);
+      if (errno !== 0 || !stdout.trim()) return { id: '', name: 'none' };
+      const [id, name] = stdout.trim().split('|', 2);
+      return { id: id || '', name: name || 'unknown' };
+    } catch {
+      return { id: '', name: 'none' };
+    }
   },
 
   async promoteApp(pkg: string, target: SystemizeTarget = 'priv-app', appName?: string): Promise<boolean> {

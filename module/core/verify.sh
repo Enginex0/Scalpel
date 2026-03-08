@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # shellcheck shell=bash disable=SC3043,SC1090
-# Post-reboot verification — confirms debloat ops survived boot, updates status.json for WebUI
+# Post-reboot verification — confirms debloat whiteouts survived boot, updates status.json for WebUI
 
 MODDIR="${MODDIR:-$(dirname "$(dirname "$(readlink -f "$0")")")}"
 SCALPEL_DATA="/data/adb/scalpel"
@@ -11,7 +11,7 @@ verify_run() {
     local _tag="verify"
     . "${MODDIR}/core/logging.sh"
     . "${MODDIR}/core/config.sh"
-    . "${MODDIR}/core/detect.sh"
+    . "${MODDIR}/core/whiteout_helpers.sh"
     config_init 2>/dev/null
     log_init
 
@@ -37,25 +37,10 @@ verify_run() {
         return 0
     fi
 
-    # Prefer the mode nuke.sh recorded over fresh detection
     local mode=""
     if [ -f "$STATUS_FILE" ]; then
         mode="$("$jq_bin" -r '.mode // ""' "$STATUS_FILE" 2>/dev/null)"
     fi
-    if [ -z "$mode" ] || [ "$mode" = "unknown" ] || [ "$mode" = "none" ] || [ "$mode" = "null" ] || [ "$mode" = "running" ] || [ "$mode" = "pm_deferred" ] || [ "$mode" = "error" ] || [ "$mode" = "partial" ]; then
-        mode="$(detect_mode)"
-    fi
-    if [ -z "$mode" ]; then
-        log_e "$_tag" "no mode detected"
-        return 1
-    fi
-
-    local mode_script="${MODDIR}/modes/mode_${mode}.sh"
-    if [ ! -f "$mode_script" ]; then
-        log_e "$_tag" "mode script missing: $mode_script"
-        return 1
-    fi
-    . "$mode_script"
 
     local verified=0 broken=0
     local tmp="${SCALPEL_DATA}/.verify_batch.$$"
@@ -68,22 +53,31 @@ verify_run() {
         return 1
     fi
 
-    # Literal tab in IFS -- subshell printf loses in busybox
     while IFS='	' read -r pkg app_path; do
         [ -z "$pkg" ] && continue
         [ -z "$app_path" ] && continue
 
-        if mode_verify "$pkg" "$app_path"; then
-            verified=$((verified + 1))
+        if [ "$mode" = "pm" ]; then
+            # pm mode: check if package is disabled
+            if pm list packages -d 2>/dev/null | grep -qF "package:${pkg}"; then
+                verified=$((verified + 1))
+            else
+                broken=$((broken + 1))
+                log_w "$_tag" "debloat not holding: $pkg (pm disabled but re-enabled)"
+            fi
         else
-            broken=$((broken + 1))
-            log_w "$_tag" "debloat not holding: $pkg ($app_path)"
+            # overlay mode: check whiteout char dev exists in module dir
+            if whiteout_verify "$MODDIR" "$app_path"; then
+                verified=$((verified + 1))
+            else
+                broken=$((broken + 1))
+                log_w "$_tag" "debloat not holding: $pkg (whiteout missing)"
+            fi
         fi
     done < "$tmp"
 
     rm -f "$tmp"
 
-    # Phase 6 stub -- systemization verification
     local sys_verified=0 sys_broken=0
 
     _update_verify_status "$verified" "$broken" "$sys_verified" "$sys_broken"
@@ -93,7 +87,6 @@ verify_run() {
     return 0
 }
 
-# Merge verify results into existing status.json (preserves nuke.sh fields)
 _update_verify_status() {
     local _tag="verify"
     local debloat_verified="$1" debloat_broken="$2"
@@ -119,7 +112,6 @@ _update_verify_status() {
             '. + {debloat_verified:$dv, debloat_broken:$db, systemize_verified:$sv, systemize_broken:$sb, last_verify:$lv, timestamp:$ts}' \
             "$STATUS_FILE" > "$tmp" 2>/dev/null
     else
-        # No existing status -- create fresh (nuke.sh hasn't run or status was lost)
         "$jq_bin" -n \
             --argjson dv "$debloat_verified" \
             --argjson db "$debloat_broken" \
@@ -151,7 +143,6 @@ _update_verify_status() {
     }
 }
 
-# Phase 6: checks dumpsys for FLAG_SYSTEM and sourceDir=/system/...
 _verify_systemized() {
     return 0
 }

@@ -4,9 +4,13 @@ export type SystemizeTarget = 'app' | 'priv-app';
 
 export type Category = 'essential' | 'caution' | 'safe' | 'google' | 'unknown';
 
-// Config override allows 'auto' (empty string in config.sh); active mode never returns 'auto'
-export type ModeOverride = 'auto' | 'zeromount' | 'mountify' | 'symlink' | 'whiteout' | 'magisk' | 'pm';
-export type ActiveMode = 'zeromount' | 'mountify' | 'symlink' | 'whiteout' | 'magisk' | 'pm' | 'none' | 'running' | 'pm_deferred' | 'error';
+export type ModeOverride = 'auto' | 'pm';
+export type ActiveMode = 'overlay' | 'pm' | 'none' | 'running' | 'error';
+
+export interface MetamoduleInfo {
+  id: string;
+  name: string;
+}
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'fatal';
 
@@ -98,7 +102,7 @@ export interface Settings {
 }
 
 export interface ModeInfo {
-  id: ModeOverride;
+  id: string;
   name: string;
   description: string;
 }

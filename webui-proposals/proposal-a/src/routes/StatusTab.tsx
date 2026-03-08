@@ -90,7 +90,13 @@ function VitalIndicator(props: { ok: boolean }) {
 export function StatusTab() {
   const [logExpanded, setLogExpanded] = createSignal(false);
 
-  const modeInfo = () => MODES.find(m => m.id === store.status.mode) || { name: store.status.mode || 'Unknown', description: '' };
+  const modeInfo = () => {
+    const found = MODES.find(m => m.id === store.status.mode);
+    const mm = store.metamoduleInfo();
+    const base = found || { name: store.status.mode || 'Unknown', description: '' };
+    const desc = mm.name && mm.name !== 'none' ? `${base.description} · ${mm.name}` : base.description;
+    return { name: base.name, description: desc };
+  };
 
   const stats = () => [
     { label: 'Debloated', value: store.status.debloated, max: 30, color: 'var(--color-success)', icon: ICONS.debloat },

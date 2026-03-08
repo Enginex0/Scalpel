@@ -361,6 +361,10 @@ export function SettingsTab() {
                 <span style="color:var(--text-tertiary);">Active Mode</span>
                 <span class="gradient-text" style="font-weight:600;">{store.status.mode}</span>
               </div>
+              <div style="display:flex;justify-content:space-between;">
+                <span style="color:var(--text-tertiary);">Metamodule</span>
+                <span style="font-family:'JetBrains Mono',monospace;">{store.metamoduleInfo().name}</span>
+              </div>
             </div>
           </div>
         </Card>

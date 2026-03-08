@@ -196,10 +196,6 @@ _finish_deferred_debloat() {
     # post-fs-data killed mid-execution (KSU 10s timeout)
     if [ "$mode" = "running" ]; then
         need_rerun="true"
-    # no filesystem mode at post-fs-data, full pm run needed
-    elif [ "$mode" = "pm_deferred" ]; then
-        need_rerun="true"
-        override_mode="pm"
     # pm attempted but PMS wasn't ready yet
     elif [ "$mode" = "pm" ] && [ "$failed" -gt 0 ]; then
         need_rerun="true"
