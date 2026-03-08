@@ -32,6 +32,7 @@ export interface DebloatedApp {
   app_name: string;
   package_name: string;
   app_path: string;
+  pending?: boolean;
 }
 
 // UI-only extension with display metadata not written to nuke_list.json

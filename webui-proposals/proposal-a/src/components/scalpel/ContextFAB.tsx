@@ -53,7 +53,6 @@ function RebootFAB() {
 
 function NukeFAB() {
   const [confirmOpen, setConfirmOpen] = createSignal(false);
-  const [nuking, setNuking] = createSignal(false);
 
   const count = () => store.debloatSelected().size;
 
@@ -74,14 +73,9 @@ function NukeFAB() {
   );
 
   const handleNuke = async () => {
-    setNuking(true);
-    try {
-      await store.nukeApps([...store.debloatSelected()]);
-      store.setDebloatSelected(new Set<string>());
-      setConfirmOpen(false);
-    } finally {
-      setNuking(false);
-    }
+    await store.nukeApps([...store.debloatSelected()]);
+    store.setDebloatSelected(new Set<string>());
+    setConfirmOpen(false);
   };
 
   return (
@@ -147,7 +141,7 @@ function NukeFAB() {
         </p>
         <div style="display:flex;gap:12px;">
           <Button variant="ghost" fullWidth onClick={() => setConfirmOpen(false)}>Cancel</Button>
-          <Button variant="danger" fullWidth loading={nuking()} onClick={handleNuke}>
+          <Button variant="danger" fullWidth onClick={handleNuke}>
             Nuke {count()}
           </Button>
         </div>

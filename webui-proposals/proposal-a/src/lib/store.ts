@@ -188,13 +188,15 @@ function createAppStore() {
           package_name: pkg,
           app_name: app?.app_name || pkg,
           app_path: app?.app_path || '',
+          pending: true,
         };
       });
 
       const { success } = await api.nukeApps(entries);
       if (success.length > 0) {
         const successEntries = entries.filter(e => success.includes(e.package_name));
-        setNukedApps(prev => [...prev, ...successEntries]);
+        const existing = new Set(nukedApps().map(a => a.package_name));
+        setNukedApps(prev => [...prev, ...successEntries.filter(e => !existing.has(e.package_name))]);
         setNeedsReboot(true);
         showToast(`Nuked ${success.length} app${success.length > 1 ? 's' : ''}`, 'success');
       }
@@ -215,6 +217,13 @@ function createAppStore() {
       }
     } catch {
       showToast('Restore failed', 'error');
+    }
+  };
+
+  const restoreAllNuked = async () => {
+    const apps = [...nukedApps()];
+    for (const app of apps) {
+      await restoreApp(app.package_name);
     }
   };
 
@@ -299,7 +308,7 @@ function createAppStore() {
     debloatSelected, setDebloatSelected,
     systemizeSelected, setSystemizeSelected,
     settings, currentTheme, toast, showToast,
-    loadInitialData, nukeApps, restoreApp, promoteApp, demoteApp, updateSettings, refreshAppList,
+    loadInitialData, nukeApps, restoreApp, restoreAllNuked, promoteApp, demoteApp, updateSettings, refreshAppList,
   };
 }
 

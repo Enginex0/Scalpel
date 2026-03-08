@@ -149,31 +149,45 @@ export function DebloatTab() {
 
       {/* Nuked apps section */}
       <Show when={filteredNukedApps().length > 0}>
-        <button
-          onClick={() => setNukedOpen(!nukedOpen())}
-          style="width:100%;display:flex;align-items:center;padding:10px 0;margin-bottom:4px;cursor:pointer;color:var(--text-secondary);font-size:13px;font-weight:600;gap:8px;"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={`transform:rotate(${nukedOpen() ? '0' : '-90'}deg);transition:transform 0.2s;`}>
-            <path d={ICONS.chevronDown} />
-          </svg>
-          Debloated ({filteredNukedApps().length})
-        </button>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <button
+            onClick={() => setNukedOpen(!nukedOpen())}
+            style="display:flex;align-items:center;padding:10px 0;cursor:pointer;color:var(--text-secondary);font-size:13px;font-weight:600;gap:8px;"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={`transform:rotate(${nukedOpen() ? '0' : '-90'}deg);transition:transform 0.2s;`}>
+              <path d={ICONS.chevronDown} />
+            </svg>
+            Debloated ({filteredNukedApps().length})
+          </button>
+          <Show when={nukedOpen() && filteredNukedApps().length > 1}>
+            <button
+              onClick={() => store.restoreAllNuked()}
+              style="padding:4px 10px;border-radius:8px;font-size:11px;font-weight:600;color:var(--text-tertiary);background:var(--bg-surface);border:1px solid var(--glass-border);cursor:pointer;"
+            >
+              Restore All
+            </button>
+          </Show>
+        </div>
         <Show when={nukedOpen()}>
           <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
             <For each={filteredNukedApps()}>
               {(app, i) => (
-                <Card variant="glass" padding="small" style={`animation:slideInRight 0.2s var(--ease-out) ${i() * 40}ms both;border-left:2px solid var(--color-success);`}>
+                <Card variant="glass" padding="small" style={`animation:slideInRight 0.2s var(--ease-out) ${i() * 40}ms both;border-left:2px solid ${app.pending ? '#ff9800' : 'var(--color-success)'};cursor:pointer;`}
+                  onClick={() => setRestoreConfirmPkg(app.package_name)}>
                   <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
                     <AppIcon packageName={app.package_name} source="ksu" size={36} />
                     <div style="flex:1;min-width:0;">
-                      <div style="font-size:14px;font-weight:500;text-decoration:line-through;opacity:0.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                      <div style={`font-size:14px;font-weight:500;${app.pending ? 'opacity:0.7;' : 'text-decoration:line-through;opacity:0.5;'}white-space:nowrap;overflow:hidden;text-overflow:ellipsis;`}>
                         <span ref={(el) => setupTextScroll(el)}>{app.app_name}</span>
                       </div>
                       <div style="font-size:11px;color:var(--text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                         <span ref={(el) => setupTextScroll(el)}>{app.package_name}</span>
                       </div>
+                      <Show when={app.pending}>
+                        <div style="font-size:10px;color:#ff9800;font-weight:600;margin-top:2px;">awaiting reboot</div>
+                      </Show>
                     </div>
-                    <Button size="small" variant="ghost" onClick={() => setRestoreConfirmPkg(app.package_name)}>Restore</Button>
+                    <Button size="small" variant="ghost" onClick={(e: MouseEvent) => { e.stopPropagation(); setRestoreConfirmPkg(app.package_name); }}>Restore</Button>
                   </div>
                 </Card>
               )}
@@ -224,9 +238,9 @@ export function DebloatTab() {
                           class={isEssential ? 'risk-essential' : isCaution ? 'risk-caution' : ''}
                           style={`
                             display:flex;align-items:center;gap:12px;padding:12px;
-                            background:${isSelected() ? 'rgba(var(--accent-rgb), 0.08)' : isEssential ? 'rgba(255,107,107,0.04)' : isCaution ? 'rgba(255,152,0,0.03)' : 'var(--bg-surface)'};
-                            border:1px solid ${isSelected() ? 'rgba(var(--accent-rgb), 0.3)' : 'var(--glass-border)'};
-                            border-left:3px solid ${app.category !== 'unknown' ? (CATEGORY_COLORS[app.category]?.color || meta.color) : 'var(--glass-border)'};
+                            background:${isSelected() ? 'rgba(255,59,48,0.10)' : isEssential ? 'rgba(255,107,107,0.04)' : isCaution ? 'rgba(255,152,0,0.03)' : 'var(--bg-surface)'};
+                            border:1px solid ${isSelected() ? 'rgba(255,59,48,0.4)' : 'var(--glass-border)'};
+                            border-left:3px solid ${isSelected() ? '#ff3b30' : app.category !== 'unknown' ? (CATEGORY_COLORS[app.category]?.color || meta.color) : 'var(--glass-border)'};
                             border-radius:12px;cursor:pointer;
                             transition:all 0.2s var(--ease-spring);
                             animation:slideInRight 0.2s var(--ease-out) ${Math.min(i(), 8) * 40}ms both;
@@ -293,12 +307,12 @@ export function DebloatTab() {
           position:fixed;bottom:calc(68px + env(safe-area-inset-bottom));left:16px;right:76px;
           padding:12px 16px;border-radius:16px;
           background:var(--bg-surface-elevated);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-          border:1px solid var(--glass-border);
+          border:1px solid rgba(255,59,48,0.3);
           display:flex;align-items:center;justify-content:space-between;
           z-index:90;
           animation:slideInUp 0.3s var(--ease-spring);
         `}>
-          <span style="font-size:14px;font-weight:600;">{selected().size} selected</span>
+          <span style="font-size:14px;font-weight:600;color:#ff3b30;">{selected().size} scheduled</span>
           <button
             onClick={() => setSelected(new Set<string>())}
             style="padding:4px 10px;border-radius:8px;font-size:12px;color:var(--text-tertiary);background:var(--bg-surface);border:1px solid var(--glass-border);"
