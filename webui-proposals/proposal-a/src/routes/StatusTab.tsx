@@ -233,8 +233,7 @@ function OrganCell(props: {
   );
 }
 
-// Immune system verification — antibody/infection markers
-function ImmuneSystem() {
+function BloodworkPanel() {
   const [flowOffset, setFlowOffset] = createSignal(0);
 
   onMount(() => {
@@ -249,9 +248,20 @@ function ImmuneSystem() {
     onCleanup(() => cancelAnimationFrame(frame));
   });
 
-  const checks = () => [
-    { label: 'Debloat', ok: store.status.debloat_verified ?? 0, broken: store.status.debloat_broken ?? 0 },
-    { label: 'Systemize', ok: store.status.systemize_verified ?? 0, broken: store.status.systemize_broken ?? 0 },
+  const bootColor = () => {
+    const c = store.bootInfo.boot_count;
+    if (c === 0) return 'var(--color-success)';
+    if (c >= 3) return 'var(--color-error)';
+    return 'var(--color-warning)';
+  };
+
+  const entries = () => [
+    { label: 'Module', value: store.moduleVersion(), color: 'var(--text-accent)' },
+    { label: 'Engine', value: store.metamoduleInfo().name || 'none', color: 'var(--text-accent)' },
+    { label: 'Scanned', value: String(store.scannedApps().length), color: 'var(--text-accent)' },
+    { label: 'User Apps', value: String(store.userApps().length), color: 'var(--text-accent)' },
+    { label: 'Boot Guard', value: `${store.bootInfo.boot_count}/3`, color: bootColor() },
+    { label: 'Override', value: store.settings.modeOverride, color: 'var(--text-accent)' },
   ];
 
   return (
@@ -260,63 +270,38 @@ function ImmuneSystem() {
         <div style={`width:6px;height:6px;border-radius:50%;background:var(--text-accent);
           box-shadow:0 0 ${6 + Math.sin(flowOffset() / 10) * 4}px rgba(var(--accent-rgb),0.5);`} />
         <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-tertiary);">
-          Immune System
+          Bloodwork
         </span>
       </div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <For each={checks()}>
-          {(check) => {
-            const healthy = () => check.broken === 0;
-            const total = () => check.ok + check.broken;
-            return (
-              <div style={`
-                position:relative;padding:12px 14px;border-radius:14px;
-                background:rgba(255,255,255,0.02);
-                border:1px solid ${healthy() ? 'rgba(0,230,118,0.15)' : 'rgba(255,59,59,0.2)'};
-                overflow:hidden;
-              `}>
-                {/* Flowing antibody line */}
-                <div style={`
-                  position:absolute;top:0;left:0;right:0;height:2px;
-                  background:linear-gradient(90deg,
-                    transparent ${flowOffset()}%,
-                    ${healthy() ? 'var(--color-success)' : 'var(--color-error)'} ${flowOffset() + 8}%,
-                    transparent ${flowOffset() + 16}%
-                  );
-                  opacity:0.6;
-                `} />
-                <div style="display:flex;align-items:center;justify-content:space-between;">
-                  <div style="display:flex;align-items:center;gap:10px;">
-                    {/* Antibody / infection marker */}
-                    <div style={`
-                      width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-                      background:${healthy() ? 'rgba(0,230,118,0.1)' : 'rgba(255,59,59,0.1)'};
-                      border:1px solid ${healthy() ? 'rgba(0,230,118,0.2)' : 'rgba(255,59,59,0.25)'};
-                    `}>
-                      <svg width="14" height="14" viewBox="0 0 24 24"
-                        fill={healthy() ? 'var(--color-success)' : 'var(--color-error)'}>
-                        <path d={healthy() ? ICONS.shield : ICONS.warning} />
-                      </svg>
-                    </div>
-                    <div>
-                      <div style="font-size:13px;font-weight:600;color:var(--text-primary);">{check.label}</div>
-                      <div style={`font-size:10px;color:${healthy() ? 'var(--color-success)' : 'var(--color-error)'};margin-top:1px;`}>
-                        {healthy() ? 'All clear' : `${check.broken} compromised`}
-                      </div>
-                    </div>
-                  </div>
-                  <div style="text-align:right;">
-                    <div style={`font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;line-height:1;
-                      color:${healthy() ? 'var(--color-success)' : 'var(--color-error)'};`}>
-                      {check.ok}
-                      <span style="font-size:12px;color:var(--text-tertiary);font-weight:400;">/{total()}</span>
-                    </div>
-                  </div>
+      <div style={`
+        position:relative;padding:14px;border-radius:14px;
+        background:rgba(255,255,255,0.02);
+        border:1px solid rgba(var(--accent-rgb),0.1);
+        overflow:hidden;
+      `}>
+        <div style={`
+          position:absolute;top:0;left:0;right:0;height:2px;
+          background:linear-gradient(90deg,
+            transparent ${flowOffset()}%,
+            var(--text-accent) ${flowOffset() + 8}%,
+            transparent ${flowOffset() + 16}%
+          );
+          opacity:0.4;
+        `} />
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;">
+          <For each={entries()}>
+            {(entry) => (
+              <div>
+                <div style="font-size:9px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">
+                  {entry.label}
+                </div>
+                <div style={`font-family:'JetBrains Mono','Space Grotesk',monospace;font-size:13px;font-weight:600;color:${entry.color};`}>
+                  {entry.value}
                 </div>
               </div>
-            );
-          }}
-        </For>
+            )}
+          </For>
+        </div>
       </div>
     </div>
   );
@@ -845,7 +830,7 @@ export function StatusTab() {
       </div>
 
       <Vein />
-      <ImmuneSystem />
+      <BloodworkPanel />
       <Vein />
       <NervousSystem />
       <Vein />

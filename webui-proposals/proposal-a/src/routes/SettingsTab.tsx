@@ -6,7 +6,7 @@ import { Button } from '../components/core/Button';
 import { Toggle } from '../components/core/Toggle';
 import { ImportModal } from '../components/layout/ImportModal';
 import { accentPresets, accentNames } from '../lib/theme';
-import { MODES, MODULE_ID, APP_VERSION } from '../lib/constants';
+import { MODES, MODULE_ID } from '../lib/constants';
 import { ICONS } from '../lib/icons';
 import type { ModeOverride, ThemeMode } from '../lib/types';
 const MONITOR_STEPS = [60, 120, 300, 600, 900, 1800, 3600];
@@ -365,7 +365,7 @@ export function SettingsTab() {
             </div>
 
             <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-tertiary);">
-              v{APP_VERSION}
+              {store.moduleVersion()}
             </div>
 
             <div class="incision-line" style="width:60%;margin:8px 0;" />

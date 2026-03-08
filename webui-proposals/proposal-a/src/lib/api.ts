@@ -281,6 +281,17 @@ export const api = {
     return true;
   },
 
+  async getModuleVersion(): Promise<string> {
+    if (shouldUseMock()) return 'v0.1.0';
+    try {
+      const { errno, stdout } = await ksuExec(`grep '^version=' ${PATHS.MODULE_DIR}/module.prop`);
+      if (errno !== 0) return 'unknown';
+      return stdout.trim().replace('version=', '') || 'unknown';
+    } catch {
+      return 'unknown';
+    }
+  },
+
   async getMetamoduleInfo(): Promise<MetamoduleInfo> {
     if (shouldUseMock()) return { id: 'meta-zeromount', name: 'ZeroMount' };
     try {

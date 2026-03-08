@@ -37,6 +37,7 @@ function createAppStore() {
   const [bootInfo, setBootInfo] = createStore<BootInfo>({ boot_count: 0 });
   const [monitorInfo, setMonitorInfo] = createStore<MonitorInfo>({ running: false, interval: 300 });
   const [metamoduleInfo, setMetamoduleInfo] = createSignal<MetamoduleInfo>({ id: '', name: 'detecting...' });
+  const [moduleVersion, setModuleVersion] = createSignal('...');
   const [logLines, setLogLines] = createSignal<string[]>([]);
   const [verboseMode, setVerboseMode] = createSignal(false);
 
@@ -142,6 +143,7 @@ function createAppStore() {
       api.getMonitorInfo(),
       api.getLogLines(),
       api.getMetamoduleInfo(),
+      api.getModuleVersion(),
     ]);
 
     const settled = <T,>(r: PromiseSettledResult<T>, fallback: T) =>
@@ -168,6 +170,7 @@ function createAppStore() {
     setMonitorInfo(settled(results[6], { running: false, interval: 300 }));
     setLogLines(settled(results[7], []));
     setMetamoduleInfo(settled(results[8], { id: '', name: 'none' }));
+    setModuleVersion(settled(results[9], 'unknown'));
     setLoading('status', false);
     setLoading('config', false);
 
@@ -325,7 +328,7 @@ function createAppStore() {
 
   return {
     activeTab, setActiveTab, loading, needsReboot, setNeedsReboot, mockMode,
-    scannedApps, nukedApps, promotedApps, userApps, status, bootInfo, monitorInfo, metamoduleInfo, logLines,
+    scannedApps, nukedApps, promotedApps, userApps, status, bootInfo, monitorInfo, metamoduleInfo, moduleVersion, logLines,
     debloatSelected, setDebloatSelected,
     systemizeSelected, setSystemizeSelected,
     settings, currentTheme, toast, showToast,
