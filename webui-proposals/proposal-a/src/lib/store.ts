@@ -56,7 +56,7 @@ function createAppStore() {
 
   const accentColors = Object.keys(accentPresets);
   const randomAccent = accentColors[Math.floor(Math.random() * accentColors.length)];
-  const initialAccent = savedAutoAccent ? randomAccent : (savedAccent && accentPresets[savedAccent] ? savedAccent : '#C0C0C0');
+  const initialAccent = savedAutoAccent ? randomAccent : (savedAccent && accentPresets[savedAccent] ? savedAccent : '#FF3B5C');
 
   const [settings, setSettings] = createStore<Settings>({
     theme: (savedTheme || 'amoled') as Settings['theme'],

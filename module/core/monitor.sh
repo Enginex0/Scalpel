@@ -165,8 +165,20 @@ _update_description() {
     fi
     [ "$mode" = "null" ] && mode="none"
 
-    local desc="Mode: ${mode} | Debloated: ${debloated} | Systemized: ${systemized} | Monitor: active"
-    [ "$repairs" -gt 0 ] 2>/dev/null && desc="${desc} | Repairs: ${repairs}"
+    local desc=""
+    if [ "$repairs" -gt 0 ] 2>/dev/null; then
+        desc="⚠️ ${repairs} repairs"
+        [ "$debloated" -gt 0 ] 2>/dev/null && desc="${desc} | ${debloated} Debloated"
+        [ "$systemized" -gt 0 ] 2>/dev/null && desc="${desc} | ${systemized} Systemized"
+        [ "$mode" != "none" ] && desc="${desc} | ${mode}"
+    elif [ "$debloated" -gt 0 ] 2>/dev/null || [ "$systemized" -gt 0 ] 2>/dev/null; then
+        desc="⚕️ Active"
+        [ "$debloated" -gt 0 ] 2>/dev/null && desc="${desc} | ${debloated} Debloated"
+        [ "$systemized" -gt 0 ] 2>/dev/null && desc="${desc} | ${systemized} Systemized"
+        [ "$mode" != "none" ] && desc="${desc} | ${mode}"
+    else
+        desc="😴 Idle — Ready to operate"
+    fi
 
     # KSU persistent description override (survives reboots, shown in manager)
     local ksud_bin="/data/adb/ksud"

@@ -149,24 +149,22 @@ export function DebloatTab() {
 
       {/* Nuked apps section */}
       <Show when={filteredNukedApps().length > 0}>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-          <button
-            onClick={() => setNukedOpen(!nukedOpen())}
-            style="display:flex;align-items:center;padding:10px 0;cursor:pointer;color:var(--text-secondary);font-size:13px;font-weight:600;gap:8px;"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={`transform:rotate(${nukedOpen() ? '0' : '-90'}deg);transition:transform 0.2s;`}>
+        <div class="section-header" onClick={() => setNukedOpen(!nukedOpen())}>
+          <span class="section-label">Debloated</span>
+          <div class="section-meta">
+            <span class="section-count">{filteredNukedApps().length}</span>
+            <Show when={filteredNukedApps().length > 1}>
+              <button
+                class="section-action"
+                onClick={(e: MouseEvent) => { e.stopPropagation(); store.restoreAllNuked(); }}
+              >
+                Restore All
+              </button>
+            </Show>
+            <svg class={`section-chevron${nukedOpen() ? ' section-chevron--open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
               <path d={ICONS.chevronDown} />
             </svg>
-            Debloated ({filteredNukedApps().length})
-          </button>
-          <Show when={nukedOpen() && filteredNukedApps().length > 1}>
-            <button
-              onClick={() => store.restoreAllNuked()}
-              style="padding:4px 10px;border-radius:8px;font-size:11px;font-weight:600;color:var(--text-tertiary);background:var(--bg-surface);border:1px solid var(--glass-border);cursor:pointer;"
-            >
-              Restore All
-            </button>
-          </Show>
+          </div>
         </div>
         <Show when={nukedOpen()}>
           <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
@@ -210,19 +208,18 @@ export function DebloatTab() {
           const isOpen = () => openSections().has(section.id);
           return (
             <div style="margin-bottom:4px;">
-              {/* Collapsible header */}
-              <button
-                onClick={() => toggleSection(section.id)}
-                style="width:100%;display:flex;align-items:center;gap:10px;padding:12px 0 8px;cursor:pointer;"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--text-tertiary)" style={`transform:rotate(${isOpen() ? '0' : '-90'}deg);transition:transform 0.2s;flex-shrink:0;`}>
-                  <path d={ICONS.chevronDown} />
-                </svg>
-                <span class="category-dot" style={`background:${meta.color};box-shadow:0 0 6px ${meta.glow};`} />
-                <span style={`font-size:13px;font-weight:600;color:${meta.color};`}>{meta.label}</span>
-                <span style="font-size:12px;color:var(--text-tertiary);">({section.apps.length})</span>
-              </button>
-              <div class="category-separator" />
+              <div class="section-header" onClick={() => toggleSection(section.id)}>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span class="category-dot" style={`background:${meta.color};box-shadow:0 0 6px ${meta.glow};`} />
+                  <span class="section-label" style={`color:${meta.color};`}>{meta.label}</span>
+                </div>
+                <div class="section-meta">
+                  <span class="section-count">{section.apps.length}</span>
+                  <svg class={`section-chevron${isOpen() ? ' section-chevron--open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d={ICONS.chevronDown} />
+                  </svg>
+                </div>
+              </div>
 
               {/* App list — only rendered when open */}
               <Show when={isOpen()}>

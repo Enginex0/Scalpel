@@ -83,19 +83,18 @@ export function SystemizeTab() {
       {/* Promoted apps */}
       <Show when={store.promotedApps().length > 0}>
         <div style="margin-bottom:20px;">
-          <button
-            onClick={() => toggleSection('promoted')}
-            style="width:100%;display:flex;align-items:center;gap:10px;padding:12px 0 8px;cursor:pointer;background:none;border:none;"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--text-tertiary)" style={`transform:rotate(${openSections().has('promoted') ? '0' : '-90'}deg);transition:transform 0.2s;flex-shrink:0;`}>
-              <path d={ICONS.chevronDown} />
-            </svg>
-            <span style="width:8px;height:8px;border-radius:50%;background:var(--color-success);flex-shrink:0;" />
-            <span style="font-size:13px;font-weight:600;letter-spacing:1px;color:var(--color-success);text-transform:uppercase;">
-              Promoted to System
-            </span>
-            <span style="font-size:12px;color:var(--text-tertiary);">({store.promotedApps().length})</span>
-          </button>
+          <div class="section-header" onClick={() => toggleSection('promoted')}>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="category-dot" style="background:var(--color-success);box-shadow:0 0 6px var(--color-success);" />
+              <span class="section-label" style="color:var(--color-success);">Promoted to System</span>
+            </div>
+            <div class="section-meta">
+              <span class="section-count">{store.promotedApps().length}</span>
+              <svg class={`section-chevron${openSections().has('promoted') ? ' section-chevron--open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d={ICONS.chevronDown} />
+              </svg>
+            </div>
+          </div>
           <Show when={openSections().has('promoted')}>
             <div style="display:flex;flex-direction:column;gap:8px;">
               <For each={store.promotedApps()}>
@@ -130,19 +129,18 @@ export function SystemizeTab() {
       </Show>
 
       {/* Available user apps */}
-      <button
-        onClick={() => toggleSection('available')}
-        style="width:100%;display:flex;align-items:center;gap:10px;padding:12px 0 8px;cursor:pointer;background:none;border:none;"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--text-tertiary)" style={`transform:rotate(${openSections().has('available') ? '0' : '-90'}deg);transition:transform 0.2s;flex-shrink:0;`}>
-          <path d={ICONS.chevronDown} />
-        </svg>
-        <span style="width:8px;height:8px;border-radius:50%;background:var(--text-accent);flex-shrink:0;" />
-        <span style="font-size:13px;font-weight:600;letter-spacing:1px;color:var(--text-tertiary);text-transform:uppercase;">
-          Available User Apps
-        </span>
-        <span style="font-size:12px;color:var(--text-tertiary);">({availableCount()})</span>
-      </button>
+      <div class="section-header" onClick={() => toggleSection('available')}>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="category-dot" style="background:var(--text-accent);box-shadow:0 0 6px var(--text-accent);" />
+          <span class="section-label">Available User Apps</span>
+        </div>
+        <div class="section-meta">
+          <span class="section-count">{availableCount()}</span>
+          <svg class={`section-chevron${openSections().has('available') ? ' section-chevron--open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d={ICONS.chevronDown} />
+          </svg>
+        </div>
+      </div>
 
       <Show when={openSections().has('available')}>
         <div style="position:relative;margin-bottom:8px;">

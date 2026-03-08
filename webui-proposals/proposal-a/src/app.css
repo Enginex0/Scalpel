@@ -415,3 +415,67 @@ a { color: var(--text-accent); text-decoration: none; }
   background: var(--glass-border);
   margin-bottom: 8px;
 }
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  margin-top: 16px;
+  margin-bottom: 4px;
+  padding: 8px 0;
+}
+
+.section-header:active {
+  opacity: 0.7;
+}
+
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+
+.section-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  background: rgba(var(--accent-rgb), 0.15);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-accent);
+}
+
+.section-action {
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+}
+
+.section-chevron {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s ease;
+  color: var(--text-accent);
+}
+
+.section-chevron--open {
+  transform: rotate(180deg);
+}

@@ -9,12 +9,6 @@ export function getContrastText(bgHex: string): string {
 }
 
 export const accentPresets: Record<string, { gradient: string; textAccent: string; rgb: string; textOnAccent: string }> = {
-  '#C0C0C0': {
-    gradient: 'linear-gradient(135deg, #E8E8E8 0%, #C0C0C0 50%, #808080 100%)',
-    textAccent: '#C0C0C0',
-    rgb: '192, 192, 192',
-    textOnAccent: '#000000',
-  },
   '#FF3B5C': {
     gradient: 'linear-gradient(135deg, #FF6B81 0%, #FF3B5C 50%, #CC0033 100%)',
     textAccent: '#FF3B5C',
@@ -60,7 +54,6 @@ export const accentPresets: Record<string, { gradient: string; textAccent: strin
 };
 
 export const accentNames: Record<string, string> = {
-  '#C0C0C0': 'Surgical Steel',
   '#FF3B5C': 'Arterial',
   '#FF9F0A': 'Cautery',
   '#30D158': 'Vital Signs',
@@ -78,7 +71,7 @@ export function needsDarkText(accentColor: string): boolean {
 }
 
 export function getAccentStyles(accentColor: string) {
-  return accentPresets[accentColor] || accentPresets['#C0C0C0'];
+  return accentPresets[accentColor] || accentPresets['#FF3B5C'];
 }
 
 export type ThemeName = 'dark' | 'light' | 'amoled';
@@ -239,7 +232,7 @@ export function applyTheme(themeObj: Theme, accentColor?: string) {
   root.style.setProperty('--toggle-off-track', isLight ? 'rgba(0, 0, 0, 0.15)' : themeObj.bgSurfaceElevated);
 
   // Apply accent-based styles
-  const accentStyles = getAccentStyles(accentColor || '#C0C0C0');
+  const accentStyles = getAccentStyles(accentColor || '#FF3B5C');
   root.style.setProperty('--gradient-primary', accentStyles.gradient);
   root.style.setProperty('--text-accent', accentStyles.textAccent);
   root.style.setProperty('--accent-rgb', accentStyles.rgb);

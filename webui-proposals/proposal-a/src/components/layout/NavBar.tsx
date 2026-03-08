@@ -12,7 +12,7 @@ interface NavBarProps {
 const tabs: { id: Tab; label: string; iconPath: string }[] = [
   { id: 'status', label: 'Status', iconPath: ICONS.shield },
   { id: 'debloat', label: 'Debloat', iconPath: ICONS.debloat },
-  { id: 'systemize', label: 'System', iconPath: ICONS.promote },
+  { id: 'systemize', label: 'Systemize', iconPath: ICONS.promote },
   { id: 'settings', label: 'Settings', iconPath: ICONS.settings },
 ];
 
