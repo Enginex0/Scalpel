@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "lowercase")]
 pub enum ModeOverride {
     #[default]
-    #[serde(rename = "")]
+    #[serde(alias = "")]
     Auto,
     Zeromount,
     Whiteout,

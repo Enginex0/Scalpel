@@ -8,7 +8,7 @@ use crate::utils::time as utime;
 
 use crate::core::config::Config;
 use crate::core::detect::detect_capabilities;
-use crate::core::types::{NukeEntry, Status};
+use crate::core::types::{DebloatModeKind, NukeEntry, Status};
 use crate::debloat::{detect_best_mode, whiteout, DebloatMode};
 use crate::paths;
 use crate::utils::cmd::boot_completed;
@@ -67,7 +67,10 @@ pub fn nuke_run(mode_override: Option<&str>) -> Result<NukeResult> {
 
     let caps = detect_capabilities(module_dir);
     let mode = detect_best_mode(&caps, &config);
-    let mode_name = format!("{:?}", mode.kind()).to_lowercase();
+    let mode_name = match mode.kind() {
+        DebloatModeKind::Zeromount | DebloatModeKind::Whiteout => "overlay",
+        DebloatModeKind::Pm => "pm",
+    };
 
     info!(mode = %mode_name, apps = entries.len(), "debloat plan");
 
@@ -110,7 +113,7 @@ pub fn nuke_run(mode_override: Option<&str>) -> Result<NukeResult> {
 
     info!(mode = %mode_name, ok, failed, "debloat complete");
 
-    Ok(NukeResult { ok, failed, mode: mode_name })
+    Ok(NukeResult { ok, failed, mode: mode_name.to_string() })
 }
 
 pub fn nuke_restore(package: &str, app_path: &str) -> Result<()> {
