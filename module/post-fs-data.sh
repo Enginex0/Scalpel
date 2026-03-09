@@ -19,21 +19,13 @@ rm -rf "$SCALPEL_DATA/boot_completed_handled"
 if [ "$BOOTCOUNT" -ge 3 ]; then
     echo "scalpel: bootloop guard triggered (count=$BOOTCOUNT), disabling" > /dev/kmsg
     rm -rf "$MODDIR/system"
-    rm -f "$MODDIR/skip_mount" "$MODDIR/skip_mountify"
     touch "$MODDIR/disable"
     exit 0
-fi
-
-# Standalone mount mode: tell root manager not to mount module/system/
-_mounting_mode=$(grep '^mounting_mode' "$SCALPEL_DATA/config.toml" 2>/dev/null | sed 's/.*= *"//' | sed 's/".*//')
-if [ "$_mounting_mode" = "standalone" ]; then
-    touch "$MODDIR/skip_mount"
-    touch "$MODDIR/skip_mountify"
 fi
 
 . "$MODDIR/common.sh"
 [ -z "$ABI" ] && exit 0
 [ -x "$BIN" ] || exit 0
 
-"$BIN" boot-init --stage=post-fs-data \
+"$BIN" boot-init --stage=post-fs-data --moddir="$MODDIR" \
     2>&1 | while IFS= read -r line; do echo "scalpel: $line" > /dev/kmsg; done

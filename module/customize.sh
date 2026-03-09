@@ -117,25 +117,9 @@ esac
 
 sc_print "🚀 Finalizing" 0.3 "h"
 
-# Detect if root manager will mount module/system/ for us
-_mounting_mode="default"
-if [ "${KSU_MAGIC_MOUNT:-}" = "true" ]; then
-    :
-elif [ -n "${KSU_VER_CODE:-}" ] && [ "$KSU_VER_CODE" -ge 22098 ] 2>/dev/null; then
-    :
-elif [ "${APATCH_BIND_MOUNT:-}" = "true" ]; then
-    :
-elif [ -d /data/adb/magisk ]; then
-    :
-else
-    _mounting_mode="standalone"
-    sc_print "  ⚙️ Standalone overlay mount enabled"
-fi
-
 "$_bin" install \
     --modpath="$MODPATH" \
     --apply-default="$_apply_default" \
-    --mounting-mode="$_mounting_mode" \
     2>&1 | while IFS= read -r line; do
         sc_print "  $line"
     done

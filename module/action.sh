@@ -16,8 +16,12 @@ if [ -f "$_pid" ]; then
     echo "  ⏹ Monitor stopped"
 fi
 
+if [ -n "$ABI" ] && [ -x "$BIN" ]; then
+    echo "  🔄 Restoring apps..."
+    "$BIN" uninstall 2>/dev/null
+fi
+
 rm -rf "$MODDIR/system"
-rm -f "$MODDIR/skip_mount" "$MODDIR/skip_mountify"
 echo "  🧹 Overlay cleared"
 
 rm -rf "$_data"

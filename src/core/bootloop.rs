@@ -55,9 +55,7 @@ pub fn bootloop_check(module_dir: &Path) -> Result<()> {
         let _ = fs::File::create(module_dir.join("disable"));
         update_description_recovery(module_dir);
         write_bootcount(-1)?;
-        if let Err(e) = Config::restore_backup() {
-            tracing::warn!("config restore failed: {e}");
-        }
+        let _ = Config::restore_backup();
 
         force_reboot();
     }

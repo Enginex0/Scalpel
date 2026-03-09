@@ -95,25 +95,6 @@ pub fn detect_zeromount() -> Option<PathBuf> {
     paths.iter().find(|p| Path::new(p).exists()).map(PathBuf::from)
 }
 
-pub fn detect_magic_mount() -> bool {
-    if std::env::var("KSU_MAGIC_MOUNT").ok().as_deref() == Some("true") {
-        return true;
-    }
-    if let Ok(ver) = std::env::var("KSU_VER_CODE") {
-        if ver.parse::<u32>().unwrap_or(0) >= 22098 {
-            return true;
-        }
-    }
-    if std::env::var("APATCH_BIND_MOUNT").ok().as_deref() == Some("true") {
-        return true;
-    }
-    Path::new("/data/adb/magisk/").exists()
-}
-
-pub fn needs_standalone_mount(caps: &Capabilities) -> bool {
-    caps.can_whiteout && !caps.has_zeromount && !caps.magic_mount
-}
-
 pub fn detect_capabilities(module_dir: &Path) -> Capabilities {
     let root_manager = detect_root_manager().unwrap_or(RootManager::Magisk);
     Capabilities {
@@ -123,6 +104,5 @@ pub fn detect_capabilities(module_dir: &Path) -> Capabilities {
         can_whiteout: can_create_whiteouts(module_dir),
         has_zeromount: detect_zeromount().is_some(),
         has_metamodule: detect_metamodule(),
-        magic_mount: detect_magic_mount(),
     }
 }

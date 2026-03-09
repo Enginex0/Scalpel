@@ -10,7 +10,8 @@ use crate::paths;
 pub fn update_description(module_dir: &Path, root_mgr: RootManager) -> Result<()> {
     let nuked = count_json_list(paths::NUKE_LIST_PATH);
     let promoted = count_json_list(paths::SYSTEMIZE_LIST_PATH);
-    let (mode, repairs) = load_status_fields();
+    let mode = load_mode_string();
+    let repairs = load_repairs();
 
     let desc = build_desc(nuked, promoted, repairs, &mode);
     write_module_prop_description(module_dir, &desc)?;
@@ -38,7 +39,7 @@ fn write_module_prop_description(module_dir: &Path, desc: &str) -> Result<()> {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    crate::utils::fs::atomic_write(&prop_path, &updated)?;
+    fs::write(&prop_path, updated).context("writing module.prop")?;
     Ok(())
 }
 
@@ -50,17 +51,20 @@ fn count_json_list(path: &str) -> usize {
         .unwrap_or(0)
 }
 
-fn load_status_fields() -> (String, u32) {
-    let v = fs::read_to_string(paths::STATUS_PATH)
+fn load_mode_string() -> String {
+    fs::read_to_string(paths::STATUS_PATH)
         .ok()
-        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
-    let mode = v.as_ref()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
         .and_then(|v| v.get("mode")?.as_str().map(String::from))
-        .unwrap_or_else(|| "auto".to_string());
-    let repairs = v.as_ref()
+        .unwrap_or_else(|| "auto".to_string())
+}
+
+fn load_repairs() -> u32 {
+    fs::read_to_string(paths::STATUS_PATH)
+        .ok()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
         .and_then(|v| v.get("monitor_repairs")?.as_u64())
-        .unwrap_or(0) as u32;
-    (mode, repairs)
+        .unwrap_or(0) as u32
 }
 
 fn build_desc(nuked: usize, promoted: usize, repairs: u32, mode: &str) -> String {

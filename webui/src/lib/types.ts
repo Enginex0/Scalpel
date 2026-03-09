@@ -4,7 +4,7 @@ export type SystemizeTarget = 'app' | 'priv-app';
 
 export type Category = 'essential' | 'caution' | 'safe' | 'google' | 'unknown';
 
-export type ModeOverride = 'auto' | 'zeromount' | 'whiteout' | 'pm';
+export type ModeOverride = 'auto' | 'overlay' | 'pm';
 export type ActiveMode = 'overlay' | 'pm' | 'none' | 'running' | 'error';
 
 export interface MetamoduleInfo {

@@ -13,7 +13,7 @@ use scalpel::core::config::Config;
 use scalpel::core::detect;
 use scalpel::core::diagnostics;
 use scalpel::core::logging;
-use scalpel::core::types::{BootStage, MountingMode, NukeEntry, ScannedApp, Status, SystemizeEntry, SystemizeTarget};
+use scalpel::core::types::{BootStage, NukeEntry, ScannedApp, Status, SystemizeEntry, SystemizeTarget};
 use scalpel::debloat::default_debloat;
 use scalpel::debloat::nuke;
 use scalpel::debloat::scanner;
@@ -51,9 +51,7 @@ fn main() -> Result<()> {
         Commands::List { what } => handle_list(what),
         Commands::SyncDescription => handle_sync_description(),
         Commands::WebUiInit => handle_webui_init(),
-        Commands::Install { modpath, apply_default, mounting_mode } => {
-            handle_install(&modpath, apply_default, mounting_mode.as_deref())
-        }
+        Commands::Install { modpath, apply_default } => handle_install(&modpath, apply_default),
         Commands::Uninstall => handle_uninstall(),
         Commands::Version => {
             println!("v{}", env!("CARGO_PKG_VERSION"));
@@ -84,22 +82,12 @@ fn handle_boot_init(stage: BootStage) -> Result<()> {
             info!(count, "post-fs-data init");
 
             nuke::nuke_run(None)?;
-
-            if config.debloat.mounting_mode == MountingMode::Standalone {
-                let magic = detect::detect_magic_mount();
-                if let Err(e) = scalpel::debloat::mountify::standalone_mount(mod_dir, magic) {
-                    tracing::error!("standalone mount failed: {e}");
-                }
-            }
         }
         BootStage::Service => {
             info!("service stage — spawning monitor");
-            if let Err(e) = std::process::Command::new(std::env::current_exe()?)
+            let _ = std::process::Command::new(std::env::current_exe()?)
                 .args(["monitor"])
-                .spawn()
-            {
-                tracing::error!("monitor spawn failed: {e}");
-            }
+                .spawn();
         }
         BootStage::BootCompleted => {
             post_boot::post_boot_run(mod_dir, data_dir)?;
@@ -151,16 +139,8 @@ fn handle_nuke(mode: Option<String>, json: bool) -> Result<()> {
 
         let nuke_path = Path::new(paths::NUKE_LIST_PATH);
         let mut existing: Vec<NukeEntry> = if nuke_path.exists() {
-            match fs::read_to_string(nuke_path)
-                .ok()
-                .and_then(|s| serde_json::from_str(&s).ok())
-            {
-                Some(list) => list,
-                None => {
-                    tracing::warn!("corrupt nuke_list.json — starting fresh");
-                    Vec::new()
-                }
-            }
+            serde_json::from_str(&fs::read_to_string(nuke_path).unwrap_or_default())
+                .unwrap_or_default()
         } else {
             Vec::new()
         };
@@ -493,7 +473,7 @@ fn handle_webui_init() -> Result<()> {
             running: monitor_running,
             interval: config.monitor.interval,
         },
-        version: format!("v{}", env!("CARGO_PKG_VERSION")),
+        version: env!("CARGO_PKG_VERSION").to_string(),
         metamodule,
     };
 
@@ -501,7 +481,7 @@ fn handle_webui_init() -> Result<()> {
     Ok(())
 }
 
-fn handle_install(modpath: &Path, apply_default: Option<bool>, mounting_mode: Option<&str>) -> Result<()> {
+fn handle_install(modpath: &Path, apply_default: Option<bool>) -> Result<()> {
     let data_dir = Path::new(paths::data_dir());
     fs::create_dir_all(data_dir)?;
 
@@ -518,13 +498,6 @@ fn handle_install(modpath: &Path, apply_default: Option<bool>, mounting_mode: Op
         let migrated = Config::migrate_from_shell(legacy)?;
         migrated.save()?;
         info!("migrated legacy config");
-    }
-
-    if let Some(mode_str) = mounting_mode {
-        let mut config = Config::load(None)?;
-        config.set("debloat.mounting_mode", mode_str)?;
-        config.save()?;
-        info!(mode = mode_str, "mounting mode persisted");
     }
 
     if apply_default.unwrap_or(false) {

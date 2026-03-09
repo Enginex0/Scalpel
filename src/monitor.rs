@@ -56,6 +56,8 @@ fn monitor_start(config: &Config, mod_dir: &Path, data_dir: &Path) -> Result<()>
             break;
         }
 
+        std::thread::sleep(Duration::from_secs(interval as u64));
+
         let repairs = check_debloated_apps(data_dir, mod_dir, &mode);
         check_systemized_apps(data_dir);
 
@@ -68,8 +70,6 @@ fn monitor_start(config: &Config, mod_dir: &Path, data_dir: &Path) -> Result<()>
 
         let root_mgr = detect_root_manager().unwrap_or(RootManager::Magisk);
         let _ = crate::description::update_description(mod_dir, root_mgr);
-
-        std::thread::sleep(Duration::from_secs(interval as u64));
     }
 
     info!("monitor shutting down");

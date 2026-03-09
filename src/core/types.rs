@@ -5,18 +5,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
-pub enum MountingMode {
-    #[default]
-    Default,
-    Standalone,
-    MountifyModule,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
 pub enum ModeOverride {
     #[default]
-    #[serde(alias = "")]
+    #[serde(rename = "")]
     Auto,
     Zeromount,
     Whiteout,
@@ -158,5 +149,4 @@ pub struct Capabilities {
     pub can_whiteout: bool,
     pub has_zeromount: bool,
     pub has_metamodule: Option<String>,
-    pub magic_mount: bool,
 }

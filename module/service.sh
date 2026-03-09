@@ -11,7 +11,7 @@ trap 'rm -f "$LOCKFILE"' EXIT
 [ -z "$ABI" ] && exit 0
 [ -x "$BIN" ] || exit 0
 
-"$BIN" boot-init --stage=service \
+"$BIN" boot-init --stage=service --moddir="$MODDIR" \
     2>&1 | while IFS= read -r line; do echo "scalpel: $line" > /dev/kmsg; done
 
 # Magisk lacks native boot-completed callback — poll and emulate

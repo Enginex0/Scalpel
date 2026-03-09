@@ -59,9 +59,6 @@ pub fn promote_app(
 
     if let Err(e) = finalize() {
         let _ = fs::remove_dir_all(&dest);
-        if target == SystemizeTarget::PrivApp {
-            let _ = permissions::remove_permissions(package, module_dir);
-        }
         return Err(e);
     }
 

@@ -129,39 +129,8 @@ pub fn fix_vendor_symlinks(module_dir: &Path) -> Result<()> {
 
 pub fn cleanup_all(module_dir: &Path) -> Result<()> {
     let system_dir = module_dir.join("system");
-    if !system_dir.exists() {
-        return Ok(());
-    }
-
-    // Only remove whiteout char devices, preserve systemized app dirs
-    remove_whiteouts_recursive(&system_dir)?;
-
-    // Clean empty dirs left behind, but don't remove system/ itself
-    // if systemized apps still live there
-    clean_empty_dirs(&system_dir);
-    Ok(())
-}
-
-fn remove_whiteouts_recursive(dir: &Path) -> Result<()> {
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let ft = entry.file_type()?;
-        if ft.is_char_device() {
-            fs::remove_file(entry.path())?;
-        } else if ft.is_dir() {
-            remove_whiteouts_recursive(&entry.path())?;
-        }
+    if system_dir.exists() {
+        fs::remove_dir_all(&system_dir)?;
     }
     Ok(())
-}
-
-fn clean_empty_dirs(dir: &Path) {
-    if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
-                clean_empty_dirs(&entry.path());
-            }
-        }
-    }
-    let _ = fs::remove_dir(dir); // only succeeds if empty
 }
