@@ -17,6 +17,8 @@ pub const ICON_DIR: &str = "/data/adb/scalpel/icons";
 pub const MODULES_DIR: &str = "/data/adb/modules";
 pub const BOOT_GATE_DIR: &str = "/data/adb/scalpel/boot_completed_handled";
 pub const GUARD_DIR: &str = "/data/adb/scalpel/guard";
+pub const SNAPSHOT_PATH: &str = "/data/adb/scalpel/snapshot.json";
+pub const PENDING_RESET: &str = "/data/adb/scalpel/pending_reset";
 
 pub fn mod_dir() -> &'static str {
     "/data/adb/modules/scalpel"

@@ -142,6 +142,12 @@ pub struct CategoryDef {
     pub icon: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SnapshotEntry {
+    pub package_name: String,
+    pub enabled: bool,
+}
+
 pub struct Capabilities {
     pub root_manager: RootManager,
     pub busybox: Option<PathBuf>,

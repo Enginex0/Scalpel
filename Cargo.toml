@@ -1,6 +1,6 @@
 [package]
 name = "scalpel"
-version = "0.1.13"
+version = "0.1.19"
 edition = "2021"
 
 [[bin]]

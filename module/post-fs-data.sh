@@ -23,6 +23,16 @@ if [ "$BOOTCOUNT" -ge 3 ]; then
     exit 0
 fi
 
+# Deferred reset: wipe systemize overlays before metamodule mounts them
+if [ -f "$SCALPEL_DATA/pending_reset" ]; then
+    echo "scalpel: pending reset — wiping overlay" > /dev/kmsg
+    rm -rf "$MODDIR/system"
+    rm -f "$SCALPEL_DATA/pending_reset"
+    rm -f "$SCALPEL_DATA/systemize_list.json"
+    rm -f "$SCALPEL_DATA/nuke_list.json"
+    rm -f "$SCALPEL_DATA/status.json"
+fi
+
 . "$MODDIR/common.sh"
 [ -z "$ABI" ] && exit 0
 [ -x "$BIN" ] || exit 0

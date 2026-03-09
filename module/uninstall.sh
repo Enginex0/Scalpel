@@ -17,21 +17,14 @@ if [ -n "$ABI" ] && [ -x "$BIN" ]; then
 else
     _log "binary missing, manual cleanup"
     _nuke="$_data/nuke_list.json"
-    _sys="$_data/systemize_list.json"
-
     if [ -f "$_nuke" ]; then
         for pkg in $(cat "$_nuke" 2>/dev/null | grep '"package_name"' | sed 's/.*: *"\(.*\)".*/\1/'); do
             pm install-existing "$pkg" >/dev/null 2>&1 || pm enable "$pkg" >/dev/null 2>&1
         done
     fi
-
-    if [ -f "$_sys" ]; then
-        for pkg in $(cat "$_sys" 2>/dev/null | grep '"package_name"' | sed 's/.*: *"\(.*\)".*/\1/'); do
-            pm install-existing "$pkg" >/dev/null 2>&1
-        done
-    fi
-
-    rm -rf "$_data"
 fi
+
+# KSU deletes the module dir on reboot — wipe our data dir too
+rm -rf "$_data"
 
 _log "module removal complete"

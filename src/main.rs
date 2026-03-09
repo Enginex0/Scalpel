@@ -13,7 +13,7 @@ use scalpel::core::config::Config;
 use scalpel::core::detect;
 use scalpel::core::diagnostics;
 use scalpel::core::logging;
-use scalpel::core::types::{BootStage, NukeEntry, ScannedApp, Status, SystemizeEntry, SystemizeTarget};
+use scalpel::core::types::{BootStage, NukeEntry, ScannedApp, SnapshotEntry, Status, SystemizeEntry, SystemizeTarget};
 use scalpel::debloat::default_debloat;
 use scalpel::debloat::nuke;
 use scalpel::debloat::scanner;
@@ -493,6 +493,10 @@ fn handle_install(modpath: &Path, apply_default: Option<bool>) -> Result<()> {
         }
     }
 
+    if !Path::new(paths::SNAPSHOT_PATH).exists() {
+        take_snapshot()?;
+    }
+
     let legacy = Path::new(paths::LEGACY_CONFIG);
     if legacy.exists() && !Path::new(paths::CONFIG_PATH).exists() {
         let migrated = Config::migrate_from_shell(legacy)?;
@@ -531,28 +535,20 @@ fn handle_uninstall() -> Result<()> {
         }
     }
 
+    // debloat revert works at runtime — whiteout removal + zm sync + pm enable
     let nuke_list = load_json_list::<NukeEntry>(paths::NUKE_LIST_PATH);
     let config = Config::load(None).unwrap_or_default();
     let caps = detect::detect_capabilities(mod_dir);
     let mode = scalpel::debloat::detect_best_mode(&caps, &config);
-
     for entry in &nuke_list {
         let _ = mode.restore(&entry.package_name, Path::new(&entry.app_path), mod_dir);
     }
 
-    let sys_list = load_json_list::<SystemizeEntry>(paths::SYSTEMIZE_LIST_PATH);
-    for entry in &sys_list {
-        let _ = scalpel::utils::cmd::run_pm(&["enable", &entry.package_name]);
-        let _ = scalpel::utils::cmd::run_pm(&["install-existing", &entry.package_name]);
-    }
+    restore_snapshot();
 
-    // Wipe overlay so KSU stops mounting stale whiteouts/systemize dirs
-    let system_dir = mod_dir.join("system");
-    if system_dir.exists() {
-        let _ = fs::remove_dir_all(&system_dir);
-    }
-
-    let _ = fs::remove_dir_all(data_dir);
+    // systemize overlay can only be torn down before metamodule mounts
+    let _ = fs::create_dir_all(data_dir);
+    fs::write(paths::PENDING_RESET, "")?;
 
     println!("ok");
     Ok(())
@@ -580,6 +576,63 @@ fn handle_log(action: LogAction) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn take_snapshot() -> Result<()> {
+    let enabled = scalpel::utils::cmd::run_pm(&["list", "packages", "-s", "-e"])
+        .unwrap_or_default();
+    let disabled = scalpel::utils::cmd::run_pm(&["list", "packages", "-s", "-d"])
+        .unwrap_or_default();
+
+    let mut entries: Vec<SnapshotEntry> = Vec::new();
+    for line in enabled.lines() {
+        let pkg = line.trim().trim_start_matches("package:");
+        if !pkg.is_empty() {
+            entries.push(SnapshotEntry { package_name: pkg.to_string(), enabled: true });
+        }
+    }
+    for line in disabled.lines() {
+        let pkg = line.trim().trim_start_matches("package:");
+        if !pkg.is_empty() {
+            entries.push(SnapshotEntry { package_name: pkg.to_string(), enabled: false });
+        }
+    }
+
+    let json = serde_json::to_string_pretty(&entries)?;
+    scalpel::utils::fs::atomic_write(Path::new(paths::SNAPSHOT_PATH), &json)?;
+    info!(count = entries.len(), "device snapshot captured");
+    Ok(())
+}
+
+fn restore_snapshot() {
+    let snapshot: Vec<SnapshotEntry> = load_json_list(paths::SNAPSHOT_PATH);
+    if snapshot.is_empty() {
+        return;
+    }
+
+    let current_disabled: std::collections::HashSet<String> =
+        scalpel::utils::cmd::run_pm(&["list", "packages", "-s", "-d"])
+            .unwrap_or_default()
+            .lines()
+            .map(|l| l.trim().trim_start_matches("package:").to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+    let mut restored = 0u32;
+    for entry in &snapshot {
+        if !entry.enabled {
+            continue;
+        }
+        if !current_disabled.contains(&entry.package_name) {
+            continue;
+        }
+        let _ = scalpel::utils::cmd::run_pm(&["install-existing", &entry.package_name]);
+        let _ = scalpel::utils::cmd::run_pm(&["enable", &entry.package_name]);
+        restored += 1;
+    }
+    if restored > 0 {
+        info!(restored, "snapshot restored drifted packages");
+    }
 }
 
 fn load_json_list<T: serde::de::DeserializeOwned>(path: &str) -> Vec<T> {

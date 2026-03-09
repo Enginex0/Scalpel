@@ -8,6 +8,24 @@ _data="/data/adb/scalpel"
 echo ""
 echo "🔪 Scalpel — Reset to Clean Slate"
 echo ""
+echo "  ⚠️  This will restore ALL apps and wipe config."
+echo ""
+echo "  🔑 VOL UP = Confirm reset"
+echo "  🔑 VOL DOWN = Abort"
+
+_result=$(getevent -qlc 1 2>/dev/null)
+case "$_result" in
+    *KEY_VOLUMEUP*)
+        echo ""
+        echo "  ✅ Confirmed — resetting..."
+        ;;
+    *)
+        echo ""
+        echo "  ❌ Aborted."
+        echo ""
+        exit 0
+        ;;
+esac
 
 _pid="$_data/monitor.pid"
 if [ -f "$_pid" ]; then
@@ -17,17 +35,12 @@ if [ -f "$_pid" ]; then
 fi
 
 if [ -n "$ABI" ] && [ -x "$BIN" ]; then
-    echo "  🔄 Restoring apps..."
+    echo "  🔄 Restoring debloated apps..."
     "$BIN" uninstall 2>/dev/null
+    echo "  ✅ Debloated apps restored"
 fi
 
-rm -rf "$MODDIR/system"
-echo "  🧹 Overlay cleared"
-
-rm -rf "$_data"
-echo "  🗑️ Data wiped"
-
 echo ""
-echo "  ✅ All config, debloat, and systemize state cleared."
-echo "  🔁 Reboot to apply."
+echo "  ✅ Debloat reverted. Systemize cleanup on next reboot."
+echo "  🔁 Reboot now to complete reset."
 echo ""
