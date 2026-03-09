@@ -1,0 +1,38 @@
+name: Build Module ZIP
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+
+      - uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27
+
+      - name: Build arm64
+        run: cargo build --release --target aarch64-linux-android
+
+      - name: Build arm32
+        run: cargo build --release --target armv7-linux-androideabi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build WebUI
+        run: cd webui && npm ci && npm run build
+
+      - name: Package ZIP
+        run: bash package.sh
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: scalpel-*.zip

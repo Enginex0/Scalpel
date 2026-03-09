@@ -1,6 +1,6 @@
 id=scalpel
 name=Scalpel
-version=v0.1.0
-versionCode=23
+version=v0.1.11
+versionCode=0111
 author=Enginex0
-description=⚕️ Clinical debloater + systemizer with multi-mode auto-detection
+description=Debloat system apps + systemize user apps

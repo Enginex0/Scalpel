@@ -1,3 +1,4 @@
-# system_server reads systemized APKs + permissions XMLs from module overlay
-allow system_server adb_data_file dir { search getattr open read }
-allow system_server adb_data_file file { read open getattr map }
+# system_server traverses module overlay to reach systemized APKs + permission XMLs
+allow system_server adb_data_file dir { search getattr open read ioctl }
+allow system_server adb_data_file file { read open getattr map ioctl }
+allow system_server adb_data_file lnk_file { read getattr }

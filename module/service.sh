@@ -1,39 +1,25 @@
 #!/system/bin/sh
-# shellcheck shell=bash disable=SC3043,SC1090
 MODDIR="${0%/*}"
+[ -f "$MODDIR/disable" ] && exit 0
 
-[ -f "${MODDIR}/disable" ] && {
-    echo "scalpel[service]: skipped (module disabled)" > /dev/kmsg
-    exit 0
-}
+# Single-instance guard
+LOCKFILE="/dev/scalpel_svc_lock"
+( set -o noclobber; echo $$ > "$LOCKFILE" ) 2>/dev/null || exit 0
+trap 'rm -f "$LOCKFILE"' EXIT
 
-# KSU/APatch fire boot-completed.sh natively after ACTION_BOOT_COMPLETED.
-# On those managers, service.sh has nothing boot-dependent to do.
-# On Magisk, boot-completed.sh never fires, so we poll and handle it here.
-if [ "$KSU" = "true" ] || [ "$APATCH" = "true" ]; then
-    echo "scalpel: service.sh deferring to boot-completed.sh (KSU/APatch)" > /dev/kmsg 2>/dev/null
-    exit 0
+. "$MODDIR/common.sh"
+[ -z "$ABI" ] && exit 0
+[ -x "$BIN" ] || exit 0
+
+"$BIN" boot-init --stage=service \
+    2>&1 | while IFS= read -r line; do echo "scalpel: $line" > /dev/kmsg; done
+
+# Magisk lacks native boot-completed callback — poll and emulate
+if [ -z "$KSU" ] && [ -z "$APATCH" ]; then
+    (
+        while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 1; done
+        sh "$MODDIR/boot-completed.sh"
+    ) &
 fi
 
-# Magisk path: poll for boot_completed, then run the shared post-boot work
-_boot_wait=0
-while [ "$(getprop sys.boot_completed)" != "1" ]; do
-    sleep 1
-    _boot_wait=$((_boot_wait + 1))
-    if [ "$_boot_wait" -ge 300 ]; then
-        echo "scalpel: boot_completed timeout after 300s, proceeding anyway" > /dev/kmsg
-        break
-    fi
-done
-
-# Recreate icon symlink (survives module updates)
-. "${MODDIR}/core/logging.sh"
-. "${MODDIR}/core/config.sh"
-config_init 2>/dev/null
-log_init 2>/dev/null
-ln -sf "/data/adb/scalpel/icons" "${MODDIR}/webroot/icons.tmp"
-mv -f "${MODDIR}/webroot/icons.tmp" "${MODDIR}/webroot/icons"
-log_d "service" "symlink: webroot/icons -> /data/adb/scalpel/icons"
-
-. "${MODDIR}/core/post_boot.sh"
-post_boot_run
+wait

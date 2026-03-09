@@ -1,43 +1,39 @@
 #!/system/bin/sh
-# shellcheck shell=bash disable=SC3043,SC1090
 MODDIR="${0%/*}"
 
-# Clear the post-boot flag so service.sh/boot-completed.sh can claim it fresh
-rm -rf "/data/adb/scalpel/boot_completed_handled" 2>/dev/null
-
-# 3-strike bootloop protection -- must run before anything else
-. "${MODDIR}/core/bootloop.sh"
-bootloop_init
-bootloop_check || exit 0
-
-# Config first so SCALPEL_MODE_OVERRIDE and SCALPEL_LOG_LEVEL are available
-. "${MODDIR}/core/config.sh"
-config_init 2>/dev/null || echo "scalpel[post-fs-data]: config_init failed (continuing)" > /dev/kmsg
-
-. "${MODDIR}/core/logging.sh"
-log_init
-
+# SAFETY: bootloop counter runs before binary — shell-native, no deps
 SCALPEL_DATA="/data/adb/scalpel"
-TAG="post-fs-data"
-log_i "$TAG" "scalpel starting (boot)"
+COUNTFILE="$SCALPEL_DATA/count.sh"
+if [ -f "$COUNTFILE" ]; then
+    . "$COUNTFILE"
+    BOOTCOUNT=$((${BOOTCOUNT:-0} + 1))
+else
+    BOOTCOUNT=1
+fi
+mkdir -p "$SCALPEL_DATA"
+echo "BOOTCOUNT=$BOOTCOUNT" > "$COUNTFILE"
 
-# Process deferred demotions before KSU locks module dirs
-_pending="${SCALPEL_DATA}/pending_demote.json"
-if [ -f "$_pending" ]; then
-    _jq_bin="${MODDIR}/bin/jq"
-    [ ! -x "$_jq_bin" ] && _jq_bin="jq"
-    while IFS='|' read -r _pkg _tgt; do
-        [ -z "$_pkg" ] && continue
-        rm -rf "${MODDIR}/system/${_tgt}/${_pkg}"
-        [ "$_tgt" = "priv-app" ] && rm -f "${MODDIR}/system/etc/permissions/privapp-permissions-${_pkg}.xml"
-        log_i "$TAG" "cleaned demoted app: $_pkg"
-    done <<DEMOTE_EOF
-$("$_jq_bin" -r '.[] | "\(.package_name)|\(.target // "priv-app")"' "$_pending" 2>/dev/null)
-DEMOTE_EOF
-    rm -f "$_pending"
+# Reset exactly-once gate so boot-completed can claim it fresh
+rm -rf "$SCALPEL_DATA/boot_completed_handled"
+
+if [ "$BOOTCOUNT" -ge 3 ]; then
+    echo "scalpel: bootloop guard triggered (count=$BOOTCOUNT), disabling" > /dev/kmsg
+    rm -rf "$MODDIR/system"
+    rm -f "$MODDIR/skip_mount" "$MODDIR/skip_mountify"
+    touch "$MODDIR/disable"
+    exit 0
 fi
 
-. "${MODDIR}/core/nuke.sh"
-nuke_run || log_w "post-fs-data" "nuke completed with failures"
+# Standalone mount mode: tell root manager not to mount module/system/
+_mounting_mode=$(grep '^mounting_mode' "$SCALPEL_DATA/config.toml" 2>/dev/null | sed 's/.*= *"//' | sed 's/".*//')
+if [ "$_mounting_mode" = "standalone" ]; then
+    touch "$MODDIR/skip_mount"
+    touch "$MODDIR/skip_mountify"
+fi
 
-log_i "$TAG" "post-fs-data complete"
+. "$MODDIR/common.sh"
+[ -z "$ABI" ] && exit 0
+[ -x "$BIN" ] || exit 0
+
+"$BIN" boot-init --stage=post-fs-data \
+    2>&1 | while IFS= read -r line; do echo "scalpel: $line" > /dev/kmsg; done
