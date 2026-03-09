@@ -9,10 +9,6 @@ use crate::core::types::BootStage;
 pub struct Cli {
     #[arg(long, short, global = true)]
     pub verbose: bool,
-    #[arg(long, global = true, default_value = "/data/adb/modules/scalpel")]
-    pub moddir: PathBuf,
-    #[arg(long, global = true, default_value = "/data/adb/scalpel")]
-    pub datadir: PathBuf,
     #[command(subcommand)]
     pub command: Commands,
 }

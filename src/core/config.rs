@@ -208,10 +208,14 @@ impl Config {
     pub fn restore_backup() -> Result<Self> {
         let backup = Path::new(CONFIG_BACKUP);
         if !backup.exists() {
-            return Ok(Self::default());
+            let cfg = Self::default();
+            cfg.save()?;
+            return Ok(cfg);
         }
         let content = fs::read_to_string(backup)?;
-        Ok(toml::from_str(&content)?)
+        let cfg: Self = toml::from_str(&content)?;
+        cfg.save()?;
+        Ok(cfg)
     }
 
     pub fn get(&self, key: &str) -> Option<String> {
