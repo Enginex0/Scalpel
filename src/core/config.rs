@@ -5,7 +5,7 @@ use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
-use crate::core::types::{LogLevel, ModeOverride};
+use crate::core::types::{LogLevel, ModeOverride, MountingMode};
 use crate::paths::{CONFIG_BACKUP, CONFIG_PATH};
 use crate::utils::fs::atomic_write;
 
@@ -31,6 +31,8 @@ pub struct Config {
 pub struct DebloatConfig {
     #[serde(default)]
     pub mode_override: ModeOverride,
+    #[serde(default)]
+    pub mounting_mode: MountingMode,
     #[serde(default)]
     pub disable_only: bool,
     #[serde(default = "default_true")]
@@ -122,6 +124,7 @@ impl Default for DebloatConfig {
     fn default() -> Self {
         Self {
             mode_override: ModeOverride::Auto,
+            mounting_mode: MountingMode::default(),
             disable_only: false,
             uninstall_fallback: default_true(),
         }
@@ -222,6 +225,7 @@ impl Config {
         match key {
             "version" => Some(self.version.clone()),
             "debloat.mode_override" => Some(mode_override_str(self.debloat.mode_override)),
+            "debloat.mounting_mode" => Some(mounting_mode_str(self.debloat.mounting_mode)),
             "debloat.disable_only" => Some(self.debloat.disable_only.to_string()),
             "debloat.uninstall_fallback" => Some(self.debloat.uninstall_fallback.to_string()),
             "systemize.deferred_uninstall" => Some(self.systemize.deferred_uninstall.to_string()),
@@ -242,6 +246,7 @@ impl Config {
         match key {
             "version" => self.version = value.to_string(),
             "debloat.mode_override" => self.debloat.mode_override = parse_mode_override(value)?,
+            "debloat.mounting_mode" => self.debloat.mounting_mode = parse_mounting_mode(value)?,
             "debloat.disable_only" => self.debloat.disable_only = parse_bool(value)?,
             "debloat.uninstall_fallback" => self.debloat.uninstall_fallback = parse_bool(value)?,
             "systemize.deferred_uninstall" => self.systemize.deferred_uninstall = parse_bool(value)?,
@@ -351,6 +356,21 @@ fn parse_log_level(s: &str) -> Result<LogLevel> {
         "error" => Ok(LogLevel::Error),
         "fatal" => Ok(LogLevel::Fatal),
         _ => bail!("invalid log level: {s}"),
+    }
+}
+
+fn mounting_mode_str(m: MountingMode) -> String {
+    match m {
+        MountingMode::Default => "default".into(),
+        MountingMode::Standalone => "standalone".into(),
+    }
+}
+
+fn parse_mounting_mode(s: &str) -> Result<MountingMode> {
+    match s {
+        "default" | "" => Ok(MountingMode::Default),
+        "standalone" => Ok(MountingMode::Standalone),
+        _ => bail!("invalid mounting mode: {s}"),
     }
 }
 

@@ -93,6 +93,8 @@ pub enum Commands {
         modpath: PathBuf,
         #[arg(long)]
         apply_default: Option<bool>,
+        #[arg(long)]
+        mounting_mode: Option<String>,
     },
     Uninstall,
     Version,

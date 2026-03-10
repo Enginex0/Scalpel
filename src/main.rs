@@ -13,7 +13,7 @@ use scalpel::core::config::Config;
 use scalpel::core::detect;
 use scalpel::core::diagnostics;
 use scalpel::core::logging;
-use scalpel::core::types::{BootStage, NukeEntry, ScannedApp, SnapshotEntry, Status, SystemizeEntry, SystemizeTarget};
+use scalpel::core::types::{BootStage, MountingMode, NukeEntry, ScannedApp, SnapshotEntry, Status, SystemizeEntry, SystemizeTarget};
 use scalpel::debloat::default_debloat;
 use scalpel::debloat::nuke;
 use scalpel::debloat::scanner;
@@ -51,7 +51,9 @@ fn main() -> Result<()> {
         Commands::List { what } => handle_list(what),
         Commands::SyncDescription => handle_sync_description(),
         Commands::WebUiInit => handle_webui_init(),
-        Commands::Install { modpath, apply_default } => handle_install(&modpath, apply_default),
+        Commands::Install { modpath, apply_default, mounting_mode } => {
+            handle_install(&modpath, apply_default, mounting_mode.as_deref())
+        }
         Commands::Uninstall => handle_uninstall(),
         Commands::Version => {
             println!("v{}", env!("CARGO_PKG_VERSION"));
@@ -82,6 +84,13 @@ fn handle_boot_init(stage: BootStage) -> Result<()> {
             info!(count, "post-fs-data init");
 
             nuke::nuke_run(None)?;
+
+            if config.debloat.mounting_mode == MountingMode::Standalone {
+                let magic = detect::detect_magic_mount();
+                if let Err(e) = scalpel::debloat::mountify::standalone_mount(mod_dir, magic) {
+                    tracing::error!("standalone mount failed: {e}");
+                }
+            }
         }
         BootStage::Service => {
             info!("service stage — spawning monitor");
@@ -495,7 +504,7 @@ fn handle_webui_init() -> Result<()> {
     Ok(())
 }
 
-fn handle_install(modpath: &Path, apply_default: Option<bool>) -> Result<()> {
+fn handle_install(modpath: &Path, apply_default: Option<bool>, mounting_mode: Option<&str>) -> Result<()> {
     let data_dir = Path::new(paths::data_dir());
     fs::create_dir_all(data_dir)?;
 
@@ -516,6 +525,12 @@ fn handle_install(modpath: &Path, apply_default: Option<bool>) -> Result<()> {
         let migrated = Config::migrate_from_shell(legacy)?;
         migrated.save()?;
         info!("migrated legacy config");
+    }
+
+    if let Some(mm) = mounting_mode {
+        let mut cfg = Config::load(None)?;
+        cfg.set("debloat.mounting_mode", mm)?;
+        cfg.save()?;
     }
 
     if apply_default.unwrap_or(false) {

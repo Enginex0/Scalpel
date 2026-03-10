@@ -74,6 +74,23 @@ else
     sc_print "  ⚠️ No VFS driver — will use pm disable fallback"
 fi
 
+# Detect if root manager handles module mounting natively
+_mounting_mode="default"
+if [ -n "$KSU_MAGIC_MOUNT" ] && [ "$KSU_MAGIC_MOUNT" = "true" ]; then
+    : # manager mounts for us
+elif [ -n "$KSU_VER_CODE" ] && [ "$KSU_VER_CODE" -ge 22098 ] 2>/dev/null; then
+    : # newer KSU with magic mount
+elif [ -n "$APATCH_BIND_MOUNT" ] && [ "$APATCH_BIND_MOUNT" = "true" ]; then
+    : # APatch mounts for us
+elif [ -d "/data/adb/magisk/" ]; then
+    : # Magisk always magic mounts
+elif [ -c /dev/zeromount ] || [ -e /dev/zeromount ]; then
+    : # ZeroMount handles its own mounting via metamodule
+else
+    _mounting_mode="standalone"
+    sc_print "  ⚠️ No native mount — using standalone overlay"
+fi
+
 sc_print "📁 Preparing Data" 0.3 "h"
 
 FRESH_INSTALL=false
@@ -120,6 +137,7 @@ sc_print "🚀 Finalizing" 0.3 "h"
 "$_bin" install \
     --modpath="$MODPATH" \
     --apply-default="$_apply_default" \
+    --mounting-mode="$_mounting_mode" \
     2>&1 | while IFS= read -r line; do
         sc_print "  $line"
     done

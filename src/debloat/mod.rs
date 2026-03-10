@@ -1,4 +1,5 @@
 pub mod default_debloat;
+pub mod mountify;
 pub mod nuke;
 pub mod scanner;
 pub mod whiteout;

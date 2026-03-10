@@ -24,6 +24,14 @@ pub enum DebloatModeKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
+pub enum MountingMode {
+    #[default]
+    Default,
+    Standalone,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Debug,
     #[default]
@@ -155,4 +163,5 @@ pub struct Capabilities {
     pub can_whiteout: bool,
     pub has_zeromount: bool,
     pub has_metamodule: Option<String>,
+    pub magic_mount: bool,
 }
