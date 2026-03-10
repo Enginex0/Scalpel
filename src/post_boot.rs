@@ -110,16 +110,15 @@ fn restore_app_states(data_dir: &Path) -> Result<()> {
 
     // Android Rescue Party re-enables disabled apps during bootloop recovery
     let disabled_output = run_pm(&["list", "packages", "-d"]).unwrap_or_default();
+    let enabled_output = run_pm(&["list", "packages", "-e"]).unwrap_or_default();
 
     for entry in &nuke_list {
         let needle = format!("package:{}", entry.package_name);
-        let is_disabled = disabled_output.lines().any(|l| l.trim() == needle);
-        if !is_disabled {
-            let enabled = run_pm(&["list", "packages", "-e"]).unwrap_or_default();
-            if enabled.lines().any(|l| l.trim() == needle) {
-                let _ = run_pm(&["disable-user", "--user", "0", &entry.package_name]);
-                debug!(pkg = %entry.package_name, "re-disabled after rescue party");
-            }
+        if !disabled_output.lines().any(|l| l.trim() == needle)
+            && enabled_output.lines().any(|l| l.trim() == needle)
+        {
+            let _ = run_pm(&["disable-user", "--user", "0", &entry.package_name]);
+            debug!(pkg = %entry.package_name, "re-disabled after rescue party");
         }
     }
     Ok(())

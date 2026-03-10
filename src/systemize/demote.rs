@@ -52,7 +52,9 @@ pub fn process_pending_demotions(module_dir: &Path) -> Result<()> {
             .join(target_str)
             .join(&entry.package_name);
         if dir.exists() {
-            fs::remove_dir_all(&dir)?;
+            if let Err(e) = fs::remove_dir_all(&dir) {
+                tracing::warn!(pkg = %entry.package_name, "demote cleanup failed: {e}");
+            }
         }
         if entry.target == SystemizeTarget::PrivApp {
             let _ = permissions::remove_permissions(&entry.package_name, module_dir);

@@ -39,7 +39,7 @@ fn write_module_prop_description(module_dir: &Path, desc: &str) -> Result<()> {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    fs::write(&prop_path, updated).context("writing module.prop")?;
+    crate::utils::fs::atomic_write(&prop_path, &updated)?;
     Ok(())
 }
 

@@ -145,8 +145,16 @@ fn handle_nuke(mode: Option<String>, json: bool) -> Result<()> {
 
         let nuke_path = Path::new(paths::NUKE_LIST_PATH);
         let mut existing: Vec<NukeEntry> = if nuke_path.exists() {
-            serde_json::from_str(&fs::read_to_string(nuke_path).unwrap_or_default())
-                .unwrap_or_default()
+            match fs::read_to_string(nuke_path)
+                .ok()
+                .and_then(|s| serde_json::from_str(&s).ok())
+            {
+                Some(list) => list,
+                None => {
+                    tracing::warn!("corrupt nuke_list.json — starting fresh");
+                    Vec::new()
+                }
+            }
         } else {
             Vec::new()
         };
