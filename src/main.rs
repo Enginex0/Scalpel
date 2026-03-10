@@ -85,9 +85,15 @@ fn handle_boot_init(stage: BootStage) -> Result<()> {
         }
         BootStage::Service => {
             info!("service stage — spawning monitor");
-            let _ = std::process::Command::new(std::env::current_exe()?)
+            if let Err(e) = std::process::Command::new(std::env::current_exe()?)
                 .args(["monitor"])
-                .spawn();
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+            {
+                tracing::error!("monitor spawn failed: {e}");
+            }
         }
         BootStage::BootCompleted => {
             post_boot::post_boot_run(mod_dir, data_dir)?;
