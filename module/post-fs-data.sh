@@ -37,5 +37,5 @@ fi
 [ -z "$ABI" ] && exit 0
 [ -x "$BIN" ] || exit 0
 
-"$BIN" boot-init --stage=post-fs-data --moddir="$MODDIR" \
+"$BIN" boot-init --stage=post-fs-data \
     2>&1 | while IFS= read -r line; do echo "scalpel: $line" > /dev/kmsg; done
