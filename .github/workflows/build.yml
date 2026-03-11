@@ -1,27 +1,112 @@
-name: Build Module ZIP
+name: Build
+
 on:
   push:
-    tags: ['v*']
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.cargo/**'
+      - 'module/**'
+      - 'webui/**'
+      - 'scripts/package.sh'
+      - '.github/workflows/build.yml'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.cargo/**'
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        profile: [debug, release]
+        target:
+          - aarch64-linux-android
+          - armv7-linux-androideabi
+        include:
+          - target: aarch64-linux-android
+            abi: arm64-v8a
+          - target: armv7-linux-androideabi
+            abi: armeabi-v7a
+
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r27c
+
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi
+          targets: ${{ matrix.target }}
 
-      - uses: nttld/setup-ndk@v1
+      - uses: actions/cache@v4
         with:
-          ndk-version: r27
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ matrix.target }}-${{ matrix.profile }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ matrix.target }}-${{ matrix.profile }}-
 
-      - name: Build arm64
-        run: cargo build --release --target aarch64-linux-android
+      - name: Build
+        run: |
+          NDK_BIN="${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export PATH="${NDK_BIN}:${PATH}"
+          FLAGS=""
+          if [ "$PROFILE" = "release" ]; then
+            FLAGS="--release"
+          fi
+          cargo build $FLAGS --target "$TARGET"
+        env:
+          PROFILE: ${{ matrix.profile }}
+          TARGET: ${{ matrix.target }}
+          NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
 
-      - name: Build arm32
-        run: cargo build --release --target armv7-linux-androideabi
+      - name: Assert debug info preserved
+        if: matrix.profile == 'debug'
+        run: |
+          bin="target/${TARGET}/debug/scalpel"
+          file "$bin"
+          if ! readelf -S "$bin" | grep -q debug_info; then
+            echo "::error::debug binary missing debug_info section"
+            exit 1
+          fi
+        env:
+          TARGET: ${{ matrix.target }}
+
+      - name: Assert stripped
+        if: matrix.profile == 'release'
+        run: |
+          bin="target/${TARGET}/release/scalpel"
+          file "$bin"
+          if readelf -S "$bin" | grep -q debug_info; then
+            echo "::error::release binary still contains debug_info"
+            exit 1
+          fi
+        env:
+          TARGET: ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-${{ matrix.abi }}-${{ matrix.profile }}
+          path: target/${{ matrix.target }}/${{ matrix.profile }}/scalpel
+          retention-days: 7
+
+  package:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
@@ -30,9 +115,105 @@ jobs:
       - name: Build WebUI
         run: cd webui && npm ci && npm run build
 
-      - name: Package ZIP
-        run: bash package.sh
-
-      - uses: softprops/action-gh-release@v2
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
         with:
-          files: scalpel-*.zip
+          path: artifacts
+
+      - name: Read version
+        id: ver
+        run: |
+          ver=$(grep '^version=' module/module.prop | cut -d= -f2)
+          echo "version=${ver}" >> "$GITHUB_OUTPUT"
+
+      - name: Package release ZIP
+        run: |
+          for pair in "arm64-v8a:aarch64-linux-android" "armeabi-v7a:armv7-linux-androideabi"; do
+            abi="${pair%%:*}"
+            src="artifacts/bin-${abi}-release/scalpel"
+            mkdir -p "target/${pair##*:}/release"
+            cp "$src" "target/${pair##*:}/release/scalpel"
+            chmod +x "target/${pair##*:}/release/scalpel"
+          done
+          bash scripts/package.sh --version "$VER" --clean
+          mv release/release/*.zip release/
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+
+      - name: Package debug ZIP
+        run: |
+          for pair in "arm64-v8a:aarch64-linux-android" "armeabi-v7a:armv7-linux-androideabi"; do
+            abi="${pair%%:*}"
+            src="artifacts/bin-${abi}-debug/scalpel"
+            mkdir -p "target/${pair##*:}/debug"
+            cp "$src" "target/${pair##*:}/debug/scalpel"
+            chmod +x "target/${pair##*:}/debug/scalpel"
+          done
+          bash scripts/package.sh --version "$VER" --clean
+          mv release/debug/*.zip release/
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+
+      - name: Separate ZIPs
+        run: |
+          mkdir -p release/rel release/dbg
+          mv release/*-debug.zip release/dbg/ 2>/dev/null || true
+          mv release/*.zip release/rel/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scalpel-release-zip
+          path: release/rel/*.zip
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scalpel-debug-zip
+          path: release/dbg/*.zip
+          retention-days: 7
+
+  release:
+    needs: [build, package]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: ver
+        run: |
+          ver=$(grep '^version=' module/module.prop | cut -d= -f2)
+          echo "version=${ver}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: scalpel-release-zip
+          path: zips/release
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: scalpel-debug-zip
+          path: zips/debug
+
+      - name: Extract changelog
+        run: |
+          ver="${VER#v}"
+          awk "/^## v${ver}/{flag=1; next} /^## v/{if(flag) exit} flag" CHANGELOG.md > /tmp/notes.md
+          cat /tmp/notes.md
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+
+      - name: Create release
+        run: |
+          gh release delete "$VER" --yes 2>/dev/null || true
+          gh release create "$VER" \
+            --title "$VER" \
+            --latest \
+            --notes-file /tmp/notes.md \
+            zips/release/*.zip \
+            zips/debug/*.zip
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

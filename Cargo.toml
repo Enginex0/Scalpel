@@ -18,6 +18,11 @@ tracing = "= 0.1.41"
 tracing-subscriber = { version = "= 0.3.19", features = ["env-filter", "registry"] }
 zip = { version = "= 8.1.0", default-features = false, features = ["deflate"] }
 
+[profile.dev]
+strip = false
+debug = 2
+opt-level = 0
+
 [profile.release]
 opt-level = "z"
 lto = true

@@ -4,3 +4,4 @@ version=v0.1.22
 versionCode=0122
 author=Enginex0
 description=Debloat system apps + systemize user apps
+updateJson=https://raw.githubusercontent.com/Enginex0/Scalpel/master/update.json
