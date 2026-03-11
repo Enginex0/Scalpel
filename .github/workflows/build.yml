@@ -130,39 +130,28 @@ jobs:
           ver=$(grep '^version=' module/module.prop | cut -d= -f2)
           echo "version=${ver}" >> "$GITHUB_OUTPUT"
 
-      - name: Package release ZIP
+      - name: Place binaries into target tree
         run: |
-          for pair in "arm64-v8a:aarch64-linux-android" "armeabi-v7a:armv7-linux-androideabi"; do
-            abi="${pair%%:*}"
-            src="artifacts/bin-${abi}-release/scalpel"
-            mkdir -p "target/${pair##*:}/release"
-            cp "$src" "target/${pair##*:}/release/scalpel"
-            chmod +x "target/${pair##*:}/release/scalpel"
+          for profile in debug release; do
+            for pair in "arm64-v8a:aarch64-linux-android" "armeabi-v7a:armv7-linux-androideabi"; do
+              abi="${pair%%:*}"
+              target="${pair##*:}"
+              src="artifacts/bin-${abi}-${profile}/scalpel"
+              dst="target/${target}/${profile}/scalpel"
+              mkdir -p "$(dirname "$dst")"
+              cp "$src" "$dst"
+              chmod +x "$dst"
+            done
           done
-          bash scripts/package.sh --version "$VER" --clean
-          mv release/release/*.zip release/
-        env:
-          VER: ${{ steps.ver.outputs.version }}
 
-      - name: Package debug ZIP
+      - name: Package ZIPs
         run: |
-          for pair in "arm64-v8a:aarch64-linux-android" "armeabi-v7a:armv7-linux-androideabi"; do
-            abi="${pair%%:*}"
-            src="artifacts/bin-${abi}-debug/scalpel"
-            mkdir -p "target/${pair##*:}/debug"
-            cp "$src" "target/${pair##*:}/debug/scalpel"
-            chmod +x "target/${pair##*:}/debug/scalpel"
-          done
           bash scripts/package.sh --version "$VER" --clean
-          mv release/debug/*.zip release/
-        env:
-          VER: ${{ steps.ver.outputs.version }}
-
-      - name: Separate ZIPs
-        run: |
           mkdir -p release/rel release/dbg
-          mv release/*-debug.zip release/dbg/ 2>/dev/null || true
-          mv release/*.zip release/rel/ 2>/dev/null || true
+          mv release/debug/*-debug.zip release/dbg/
+          mv release/release/*.zip release/rel/
+        env:
+          VER: ${{ steps.ver.outputs.version }}
 
       - uses: actions/upload-artifact@v4
         with:
