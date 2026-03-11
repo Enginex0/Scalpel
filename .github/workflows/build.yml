@@ -112,8 +112,12 @@ jobs:
         with:
           node-version: 20
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
       - name: Build WebUI
-        run: cd webui && npm ci && npm run build
+        run: cd webui && pnpm install --frozen-lockfile && pnpm build
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
