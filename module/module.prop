@@ -1,7 +1,7 @@
 id=scalpel
 name=Scalpel
-version=v0.1.22
-versionCode=0122
+version=v0.1.27
+versionCode=0127
 author=Enginex0
 description=Debloat system apps + systemize user apps
 updateJson=https://raw.githubusercontent.com/Enginex0/Scalpel/master/update.json
