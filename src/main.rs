@@ -337,20 +337,14 @@ fn handle_detect(what: DetectTarget) -> Result<()> {
             let meta = detect::detect_metamodule();
             if json {
                 match meta {
-                    Some(id) => {
-                        println!(
-                            "{}",
-                            serde_json::to_string(&MetamoduleInfo {
-                                id: id.clone(),
-                                name: id,
-                            })?
-                        );
+                    Some((id, name)) => {
+                        println!("{}", serde_json::to_string(&MetamoduleInfo { id, name })?);
                     }
                     None => println!("null"),
                 }
             } else {
                 match meta {
-                    Some(id) => println!("metamodule: {id}"),
+                    Some((id, name)) => println!("metamodule: {id} ({name})"),
                     None => println!("no metamodule detected"),
                 }
             }
@@ -481,10 +475,18 @@ fn handle_webui_init() -> Result<()> {
         .unwrap_or(false);
 
     let config = Config::load(None)?;
-    let metamodule = detect::detect_metamodule().map(|id| MetamoduleInfo {
-        id: id.clone(),
-        name: id,
-    });
+    let metamodule = detect::detect_metamodule().map(|(id, name)| MetamoduleInfo { id, name });
+
+    let config_snap = ConfigSnapshot {
+        mode_override: config.get("debloat.mode_override").unwrap_or_default(),
+        disable_only: config.debloat.disable_only,
+        uninstall_fallback: config.debloat.uninstall_fallback,
+        refresh_on_boot: config.scan.refresh_on_boot,
+        deferred_uninstall: config.systemize.deferred_uninstall,
+        log_level: config.get("log.level").unwrap_or_default(),
+        monitor_enabled: config.monitor.enabled,
+        monitor_interval: config.monitor.interval,
+    };
 
     let response = WebUiInitResponse {
         scanned_apps,
@@ -498,6 +500,7 @@ fn handle_webui_init() -> Result<()> {
         },
         version: env!("CARGO_PKG_VERSION").to_string(),
         metamodule,
+        config: config_snap,
     };
 
     println!("{}", serde_json::to_string(&response)?);
@@ -672,6 +675,18 @@ fn load_json_list<T: serde::de::DeserializeOwned>(path: &str) -> Vec<T> {
 }
 
 #[derive(Serialize)]
+struct ConfigSnapshot {
+    mode_override: String,
+    disable_only: bool,
+    uninstall_fallback: bool,
+    refresh_on_boot: bool,
+    deferred_uninstall: bool,
+    log_level: String,
+    monitor_enabled: bool,
+    monitor_interval: u32,
+}
+
+#[derive(Serialize)]
 struct WebUiInitResponse {
     scanned_apps: Vec<ScannedApp>,
     nuked_apps: Vec<NukeEntry>,
@@ -681,6 +696,7 @@ struct WebUiInitResponse {
     monitor_info: MonitorInfo,
     version: String,
     metamodule: Option<MetamoduleInfo>,
+    config: ConfigSnapshot,
 }
 
 #[derive(Serialize)]

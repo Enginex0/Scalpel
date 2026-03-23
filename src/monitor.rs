@@ -82,12 +82,14 @@ fn check_debloated_apps(data_dir: &Path, mod_dir: &Path, mode: &DebloatMode) -> 
     let mut repairs = 0u32;
 
     for entry in &nuke_list {
-        match mode.verify(&entry.package_name, Path::new(&entry.app_path), mod_dir) {
+        let stored = Path::new(&entry.app_path);
+        let resolved = fs::canonicalize(stored).unwrap_or_else(|_| stored.to_path_buf());
+        match mode.verify(&entry.package_name, &resolved, mod_dir) {
             Ok(true) => {}
             _ => {
                 warn!(pkg = %entry.package_name, "debloat broken, repairing");
                 if mode
-                    .debloat(&entry.package_name, Path::new(&entry.app_path), mod_dir)
+                    .debloat(&entry.package_name, &resolved, mod_dir)
                     .is_ok()
                 {
                     repairs += 1;

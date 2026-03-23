@@ -74,10 +74,15 @@ fn remove_system_updates(data_dir: &Path) -> Result<()> {
     let updatable = run_pm(&["list", "packages", "-u"]).unwrap_or_default();
 
     for entry in &nuke_list {
-        if updatable.lines().any(|l| l.trim_start_matches("package:") == entry.package_name) {
-            if run_pm(&["uninstall", "-k", "--user", "0", &entry.package_name]).is_ok() {
-                debug!(pkg = %entry.package_name, "removed system update");
-            }
+        if !updatable.lines().any(|l| l.trim_start_matches("package:") == entry.package_name) {
+            continue;
+        }
+        if has_data_app_copy(&entry.package_name) {
+            debug!(pkg = %entry.package_name, "skipping system update removal: user has /data/app copy");
+            continue;
+        }
+        if run_pm(&["uninstall", "-k", "--user", "0", &entry.package_name]).is_ok() {
+            debug!(pkg = %entry.package_name, "removed system update");
         }
     }
     Ok(())
@@ -93,13 +98,59 @@ fn uninstall_fallback(config: &Config, data_dir: &Path) -> Result<()> {
         return Ok(());
     }
 
+    let done_path = data_dir.join("uninstall_fallback_done.json");
+    let raw_done: std::collections::HashSet<String> = if done_path.exists() {
+        fs::read_to_string(&done_path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    } else {
+        std::collections::HashSet::new()
+    };
+
+    // Prune stale entries (restored-then-re-nuked apps)
+    let nuke_pkgs: std::collections::HashSet<&str> =
+        nuke_list.iter().map(|e| e.package_name.as_str()).collect();
+    let done: std::collections::HashSet<String> = raw_done
+        .into_iter()
+        .filter(|pkg| nuke_pkgs.contains(pkg.as_str()))
+        .collect();
+
+    let mut updated = done.clone();
+
     for entry in &nuke_list {
+        if done.contains(&entry.package_name) {
+            continue;
+        }
+        if has_data_app_copy(&entry.package_name) {
+            debug!(pkg = %entry.package_name, "skipping uninstall fallback: user has /data/app copy");
+            continue;
+        }
         match run_pm(&["uninstall", "-k", "--user", "0", &entry.package_name]) {
             Ok(_) => debug!(pkg = %entry.package_name, "uninstall fallback ok"),
-            Err(_) => {} // Already uninstalled or system app — expected
+            Err(_) => {}
+        }
+        updated.insert(entry.package_name.clone());
+    }
+
+    if updated != done {
+        if let Ok(json) = serde_json::to_string(&updated) {
+            let _ = crate::utils::fs::atomic_write(&done_path, &json);
         }
     }
     Ok(())
+}
+
+fn has_data_app_copy(pkg: &str) -> bool {
+    run_pm(&["path", pkg])
+        .unwrap_or_default()
+        .lines()
+        .any(|l| {
+            l.trim()
+                .strip_prefix("package:")
+                .map(|p| p.starts_with("/data/app/"))
+                .unwrap_or(false)
+        })
 }
 
 fn restore_app_states(data_dir: &Path) -> Result<()> {
@@ -138,11 +189,13 @@ fn verify_debloat(data_dir: &Path, mod_dir: &Path) -> Result<()> {
     let mut broken = 0u32;
 
     for entry in &nuke_list {
-        match mode.verify(&entry.package_name, Path::new(&entry.app_path), mod_dir) {
+        let stored = Path::new(&entry.app_path);
+        let resolved = fs::canonicalize(stored).unwrap_or_else(|_| stored.to_path_buf());
+        match mode.verify(&entry.package_name, &resolved, mod_dir) {
             Ok(true) => verified += 1,
             _ => {
                 warn!(pkg = %entry.package_name, "debloat broken, repairing");
-                if mode.debloat(&entry.package_name, Path::new(&entry.app_path), mod_dir).is_ok() {
+                if mode.debloat(&entry.package_name, &resolved, mod_dir).is_ok() {
                     verified += 1;
                 } else {
                     broken += 1;

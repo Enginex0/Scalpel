@@ -20,6 +20,17 @@ pub const GUARD_DIR: &str = "/data/adb/scalpel/guard";
 pub const SNAPSHOT_PATH: &str = "/data/adb/scalpel/snapshot.json";
 pub const PENDING_RESET: &str = "/data/adb/scalpel/pending_reset";
 
+pub const SYSTEM_PARTITIONS: &[&str] = &[
+    "system", "vendor", "product", "system_ext", "odm", "oem",
+];
+
+pub const VENDOR_PARTITIONS: &[&str] = &[
+    "mi_ext",
+    "my_bigball", "my_carrier", "my_company", "my_engineering",
+    "my_heytap", "my_manifest", "my_preload", "my_product",
+    "my_region", "my_reserve", "my_stock",
+];
+
 pub fn mod_dir() -> &'static str {
     "/data/adb/modules/scalpel"
 }

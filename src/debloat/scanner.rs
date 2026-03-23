@@ -24,7 +24,7 @@ pub fn scan(data_dir: &Path) -> Result<Vec<ScannedApp>> {
     let icon_dir = data_dir.join("icons");
     fs::create_dir_all(&icon_dir)?;
 
-    let pkg_map = build_package_map();
+    let (pkg_map, dir_pkg_map) = build_package_map();
     let partitions = scan_partitions();
     let mut apps = Vec::new();
 
@@ -61,9 +61,11 @@ pub fn scan(data_dir: &Path) -> Result<Vec<ScannedApp>> {
 
                 let badging = run_aapt_badging(&apk, aapt.as_deref());
 
+                let apk_canonical = fs::canonicalize(&apk).unwrap_or_else(|_| apk.clone());
                 let pkg = pkg_map
-                    .get(&apk)
+                    .get(&apk_canonical)
                     .cloned()
+                    .or_else(|| dir_pkg_map.get(&dir_name).cloned())
                     .or_else(|| parse_package_name(badging.as_deref()))
                     .unwrap_or_else(|| dir_name.clone());
 
@@ -130,14 +132,15 @@ pub fn regenerate_icons(data_dir: &Path) -> Result<u32> {
     Ok(count)
 }
 
-fn build_package_map() -> HashMap<PathBuf, String> {
-    let mut map = HashMap::new();
+fn build_package_map() -> (HashMap<PathBuf, String>, HashMap<String, String>) {
+    let mut path_map = HashMap::new();
+    let mut dir_map = HashMap::new();
     let output = match Command::new("pm")
         .args(["list", "packages", "-f"])
         .output()
     {
         Ok(o) => o,
-        Err(_) => return map,
+        Err(_) => return (path_map, dir_map),
     };
     let stdout = String::from_utf8_lossy(&output.stdout);
     for line in stdout.lines() {
@@ -150,55 +153,40 @@ fn build_package_map() -> HashMap<PathBuf, String> {
             let path = &rest[..eq_pos];
             let pkg = &rest[eq_pos + 1..];
             if !path.is_empty() && !pkg.is_empty() {
-                map.insert(PathBuf::from(path), pkg.to_string());
+                let path_buf = PathBuf::from(path);
+                let canonical = fs::canonicalize(&path_buf).unwrap_or_else(|_| path_buf.clone());
+                path_map.insert(canonical, pkg.to_string());
+                if let Some(dir_name) = path_buf.parent().and_then(|p| p.file_name()) {
+                    dir_map.entry(dir_name.to_string_lossy().to_string())
+                        .or_insert_with(|| pkg.to_string());
+                }
             }
         }
     }
-    map
+    (path_map, dir_map)
 }
 
 fn scan_partitions() -> Vec<PathBuf> {
     let mut partitions = Vec::new();
     let mounts = fs::read_to_string("/proc/mounts").unwrap_or_default();
 
-    let known = [
-        "/system",
-        "/vendor",
-        "/product",
-        "/system_ext",
-        "/odm",
-        "/oem",
-        "/mi_ext",
-    ];
-    let oem_prefixes = [
-        "my_bigball",
-        "my_carrier",
-        "my_company",
-        "my_engineering",
-        "my_heytap",
-        "my_manifest",
-        "my_preload",
-        "my_product",
-        "my_region",
-        "my_stock",
-    ];
-
     for line in mounts.lines() {
         let mount_point = match line.split_whitespace().nth(1) {
             Some(m) => m,
             None => continue,
         };
-        if known.contains(&mount_point) {
+        let name = mount_point.trim_start_matches('/');
+        if crate::paths::SYSTEM_PARTITIONS.contains(&name)
+            || crate::paths::VENDOR_PARTITIONS.contains(&name)
+        {
             partitions.push(PathBuf::from(mount_point));
-        }
-        for prefix in &oem_prefixes {
-            if mount_point == format!("/{prefix}") {
-                partitions.push(PathBuf::from(mount_point));
-            }
         }
     }
 
-    for sub in ["vendor", "product", "system_ext", "odm", "oem"] {
+    for sub in crate::paths::SYSTEM_PARTITIONS {
+        if *sub == "system" {
+            continue;
+        }
         let p = PathBuf::from(format!("/system/{sub}"));
         if p.exists() && !partitions.iter().any(|pp| *pp == PathBuf::from(format!("/{sub}"))) {
             partitions.push(p);

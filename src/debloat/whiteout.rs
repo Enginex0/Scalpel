@@ -7,20 +7,7 @@ use std::path::Path;
 use anyhow::{bail, Context, Result};
 use tracing::{debug, warn};
 
-const VENDOR_PARTS: &[&str] = &[
-    "mi_ext",
-    "my_bigball",
-    "my_carrier",
-    "my_company",
-    "my_engineering",
-    "my_heytap",
-    "my_manifest",
-    "my_preload",
-    "my_product",
-    "my_region",
-    "my_reserve",
-    "my_stock",
-];
+use crate::paths;
 
 pub fn whiteout_create(module_dir: &Path, app_path: &Path) -> Result<()> {
     let app_dir = app_path
@@ -110,7 +97,7 @@ pub fn whiteout_verify(module_dir: &Path, app_path: &Path) -> Result<bool> {
 }
 
 pub fn fix_vendor_symlinks(module_dir: &Path) -> Result<()> {
-    for part in VENDOR_PARTS {
+    for part in paths::VENDOR_PARTITIONS {
         let overlay_path = module_dir.join("system").join(part);
         let real_path = Path::new("/").join(part);
 

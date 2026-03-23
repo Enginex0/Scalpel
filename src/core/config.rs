@@ -284,10 +284,10 @@ impl Config {
                 "SCALPEL_MODE_OVERRIDE" => {
                     cfg.debloat.mode_override = match val {
                         "" | "auto" => ModeOverride::Auto,
+                        "overlay" => ModeOverride::Overlay,
                         "zeromount" => ModeOverride::Zeromount,
                         "whiteout" => ModeOverride::Whiteout,
                         "pm" => ModeOverride::Pm,
-                        // Removed modes fall back to auto
                         "mountify" | "symlink" | "magisk" => ModeOverride::Auto,
                         other => {
                             warn!("unknown legacy mode '{other}', defaulting to auto");
@@ -323,7 +323,9 @@ impl Config {
 fn mode_override_str(m: ModeOverride) -> String {
     match m {
         ModeOverride::Auto => "auto".into(),
-        ModeOverride::Zeromount | ModeOverride::Whiteout => "overlay".into(),
+        ModeOverride::Overlay => "overlay".into(),
+        ModeOverride::Zeromount => "zeromount".into(),
+        ModeOverride::Whiteout => "whiteout".into(),
         ModeOverride::Pm => "pm".into(),
     }
 }
@@ -341,7 +343,8 @@ fn log_level_str(l: LogLevel) -> String {
 fn parse_mode_override(s: &str) -> Result<ModeOverride> {
     match s {
         "" | "auto" => Ok(ModeOverride::Auto),
-        "overlay" | "zeromount" => Ok(ModeOverride::Zeromount),
+        "overlay" => Ok(ModeOverride::Overlay),
+        "zeromount" => Ok(ModeOverride::Zeromount),
         "whiteout" => Ok(ModeOverride::Whiteout),
         "pm" => Ok(ModeOverride::Pm),
         _ => bail!("invalid mode override: {s}"),

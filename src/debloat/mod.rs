@@ -92,15 +92,15 @@ impl DebloatMode {
 }
 
 pub fn detect_best_mode(caps: &Capabilities, config: &Config) -> DebloatMode {
-    if config.debloat.mode_override != ModeOverride::Auto {
-        return match config.debloat.mode_override {
-            ModeOverride::Zeromount => DebloatMode::Zeromount {
+    match config.debloat.mode_override {
+        ModeOverride::Zeromount => {
+            return DebloatMode::Zeromount {
                 zm_bin: detect::detect_zeromount().unwrap_or_default(),
-            },
-            ModeOverride::Whiteout => DebloatMode::Whiteout,
-            ModeOverride::Pm => DebloatMode::Pm,
-            ModeOverride::Auto => unreachable!(),
-        };
+            };
+        }
+        ModeOverride::Whiteout => return DebloatMode::Whiteout,
+        ModeOverride::Pm => return DebloatMode::Pm,
+        ModeOverride::Auto | ModeOverride::Overlay => {}
     }
 
     if caps.has_zeromount {
@@ -112,6 +112,9 @@ pub fn detect_best_mode(caps: &Capabilities, config: &Config) -> DebloatMode {
     if caps.can_whiteout {
         info!("auto-detected whiteout mode");
         return DebloatMode::Whiteout;
+    }
+    if config.debloat.mode_override == ModeOverride::Overlay {
+        info!("overlay requested but no overlay capability, falling back to pm");
     }
     info!("falling back to pm mode");
     DebloatMode::Pm

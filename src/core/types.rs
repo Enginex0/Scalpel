@@ -9,6 +9,7 @@ pub enum ModeOverride {
     #[default]
     #[serde(alias = "")]
     Auto,
+    Overlay,
     Zeromount,
     Whiteout,
     Pm,

@@ -150,12 +150,9 @@ fn process_raw_whiteouts(mode: &DebloatMode, module_dir: &Path) -> Result<()> {
             continue;
         }
 
-        let valid = line.starts_with("/system/")
-            || line.starts_with("/vendor/")
-            || line.starts_with("/product/")
-            || line.starts_with("/system_ext/")
-            || line.starts_with("/oem/")
-            || line.starts_with("/odm/");
+        let prefix = line.split('/').nth(1).unwrap_or("");
+        let valid = paths::SYSTEM_PARTITIONS.contains(&prefix)
+            || paths::VENDOR_PARTITIONS.contains(&prefix);
 
         if !valid {
             warn!(path = %line, "raw: skipping invalid path");

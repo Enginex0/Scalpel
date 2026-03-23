@@ -56,16 +56,25 @@ pub fn detect_aapt() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-pub fn detect_metamodule() -> Option<String> {
+pub fn detect_metamodule() -> Option<(String, String)> {
     let modules = Path::new(paths::MODULES_DIR);
-    let entries = fs::read_dir(modules).ok()?;
-    for entry in entries.flatten() {
+    for entry in fs::read_dir(modules).ok()?.flatten() {
         let prop_path = entry.path().join("module.prop");
-        if let Ok(contents) = fs::read_to_string(&prop_path) {
-            if contents.lines().any(|l| l.trim() == "metamodule=1") {
-                return entry.file_name().to_str().map(String::from);
-            }
+        let Ok(contents) = fs::read_to_string(&prop_path) else { continue };
+        let is_meta = contents.lines().any(|l| {
+            let t = l.trim();
+            t == "metamodule=1" || t == "metamodule=true"
+        });
+        if !is_meta {
+            continue;
         }
+        let id = entry.file_name().to_string_lossy().to_string();
+        let name = contents
+            .lines()
+            .find_map(|l| l.strip_prefix("name="))
+            .unwrap_or(&id)
+            .to_string();
+        return Some((id, name));
     }
     None
 }
@@ -118,7 +127,7 @@ pub fn detect_capabilities(module_dir: &Path) -> Capabilities {
         aapt: detect_aapt(),
         can_whiteout: can_create_whiteouts(module_dir),
         has_zeromount: detect_zeromount().is_some(),
-        has_metamodule: detect_metamodule(),
+        has_metamodule: detect_metamodule().map(|(id, _)| id),
         magic_mount: detect_magic_mount(),
     }
 }
