@@ -66,6 +66,8 @@ SCRIPTS=(
 declare -A ABI_TARGET=(
     [arm64-v8a]=aarch64-linux-android
     [armeabi-v7a]=armv7-linux-androideabi
+    [x86_64]=x86_64-linux-android
+    [x86]=i686-linux-android
 )
 
 setup_toolchain() {
@@ -159,8 +161,8 @@ package_zip() {
         fi
     done
 
-    if [ "$found_bins" -ne 2 ]; then
-        echo "FATAL: [$profile] found $found_bins/2 binaries" >&2
+    if [ "$found_bins" -ne "${#ABI_TARGET[@]}" ]; then
+        echo "FATAL: [$profile] found $found_bins/${#ABI_TARGET[@]} binaries" >&2
         rm -rf "$staging"
         exit 1
     fi
@@ -199,7 +201,7 @@ package_zip() {
 
     echo "    Output:  $out_path"
     echo "    Size:    $(du -h "$out_path" | cut -f1)"
-    echo "    Bins:    $found_bins/2"
+    echo "    Bins:    $found_bins/${#ABI_TARGET[@]}"
     echo "    WebUI:   present"
 }
 
@@ -215,7 +217,7 @@ if [ "$BUILD" = true ]; then
 
     if [ -f "$WEBUI_DIR/package.json" ]; then
         echo "==> Building WebUI"
-        (cd "$WEBUI_DIR" && npm install --silent && npm run build)
+        (cd "$WEBUI_DIR" && pnpm install --silent && pnpm run build)
         if [ -d "$WEBUI_DIR/dist" ]; then
             rm -rf "$MODULE_DIR/webroot"
             cp -r "$WEBUI_DIR/dist" "$MODULE_DIR/webroot"

@@ -30,11 +30,17 @@ jobs:
         target:
           - aarch64-linux-android
           - armv7-linux-androideabi
+          - x86_64-linux-android
+          - i686-linux-android
         include:
           - target: aarch64-linux-android
             abi: arm64-v8a
           - target: armv7-linux-androideabi
             abi: armeabi-v7a
+          - target: x86_64-linux-android
+            abi: x86_64
+          - target: i686-linux-android
+            abi: x86
 
     steps:
       - uses: actions/checkout@v4
@@ -133,7 +139,7 @@ jobs:
       - name: Place binaries into target tree
         run: |
           for profile in debug release; do
-            for pair in "arm64-v8a:aarch64-linux-android" "armeabi-v7a:armv7-linux-androideabi"; do
+            for pair in "arm64-v8a:aarch64-linux-android" "armeabi-v7a:armv7-linux-androideabi" "x86_64:x86_64-linux-android" "x86:i686-linux-android"; do
               abi="${pair%%:*}"
               target="${pair##*:}"
               src="artifacts/bin-${abi}-${profile}/scalpel"
